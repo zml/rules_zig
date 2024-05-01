@@ -1,6 +1,7 @@
 load(
     "@rules_zig//zig:defs.bzl",
-    "zig_library",
+    "BINARY_KIND",
+    "zig_binary",
     "zig_module",
     "zig_test",
 )
@@ -25,15 +26,16 @@ zig_test(
     name = "test",
     size = "small",
     srcs = _SRCS,
-    cdeps = ["//zig/lib:libc"],
+    deps = ["//zig/lib:libc"],
     data = ["test-data.txt"],
     main = "runfiles.zig",
 )
 
 # Only used for documentation generation.
-zig_library(
+zig_binary(
     name = "lib",
     srcs = _SRCS,
+    kind = BINARY_KIND.static_lib,
     extra_docs = ["guide.md"],
     main = "runfiles.zig",
     tags = ["manual"],

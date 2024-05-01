@@ -57,10 +57,18 @@ ATTRS = {
         doc = "Other files required when building the module, e.g. files embedded using `@embedFile`.",
         mandatory = False,
     ),
+    "copts": attr.string_list(
+        doc = "Zig compiler flags required to build the sources of the target. Subject to location expansion.",
+        mandatory = False,
+    ),
+    "linkopts": attr.string_list(
+        doc = "Zig linker flags required to build the sources of the target. Subject to location expansion.",
+        mandatory = False,
+    ),
     "deps": attr.label_list(
         doc = "Other modules required when building the module.",
         mandatory = False,
-        providers = [ZigModuleInfo],
+        # providers = [ZigModuleInfo],
     ),
     "data": attr.label_list(
         allow_files = True,
@@ -91,11 +99,13 @@ def _zig_module_impl(ctx):
 
     bazel_builtin = bazel_builtin_module(ctx)
 
-    modules = [
-        dep[ZigModuleInfo]
-        for dep in ctx.attr.deps
-        if ZigModuleInfo in dep
-    ] + [bazel_builtin]
+    zdeps = [bazel_builtin]
+    cdeps = []
+    for dep in ctx.attr.deps:
+        if ZigModuleInfo in dep:
+            zdeps.append(dep[ZigModuleInfo])
+        elif CcInfo in dep:
+            cdeps.append(dep[CcInfo])
 
     module = zig_module_info(
         name = ctx.label.name,
@@ -103,7 +113,10 @@ def _zig_module_impl(ctx):
         main = ctx.file.main,
         srcs = ctx.files.srcs,
         extra_srcs = ctx.files.extra_srcs,
-        deps = modules,
+        copts =  ctx.attr.copts,
+        linkopts = ctx.attr.linkopts,
+        deps = zdeps,
+        cdeps = cdeps,
     )
 
     return [default, module]

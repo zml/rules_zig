@@ -5,21 +5,19 @@ module called `bazel_builtin` that exposes Bazel specific information such as
 the current target name or current repository name.
 """
 
-load("//zig/private:zig_binary.bzl", _zig_binary = "zig_binary")
+load("//zig/private:zig_binary.bzl", _zig_binary = "zig_binary", _BINARY_KIND = "BINARY_KIND")
 load(
     "//zig/private:zig_configure.bzl",
     _zig_configure = "zig_configure",
     _zig_configure_binary = "zig_configure_binary",
     _zig_configure_test = "zig_configure_test",
 )
-load("//zig/private:zig_library.bzl", _zig_library = "zig_library")
 load("//zig/private:zig_module.bzl", _zig_module = "zig_module")
-load("//zig/private:zig_shared_library.bzl", _zig_shared_library = "zig_shared_library")
 load("//zig/private:zig_test.bzl", _zig_test = "zig_test")
 
+BINARY_KIND = _BINARY_KIND
 zig_binary = _zig_binary
-zig_library = _zig_library
-zig_shared_library = _zig_shared_library
+zig_library = _zig_module
 zig_module = _zig_module
 zig_test = _zig_test
 zig_configure = _zig_configure

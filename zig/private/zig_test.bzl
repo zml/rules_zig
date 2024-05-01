@@ -3,14 +3,11 @@
 load(
     "//zig/private/common:zig_build.bzl",
     "TEST_ATTRS",
+    "DOCS_ATTRS",
     "zig_build_impl",
+    "BINARY_KIND",
     COMMON_ATTRS = "ATTRS",
     COMMON_TOOLCHAINS = "TOOLCHAINS",
-)
-load(
-    "//zig/private/common:zig_docs.bzl",
-    "zig_docs_impl",
-    DOCS_ATTRS = "ATTRS",
 )
 
 DOC = """\
@@ -44,9 +41,7 @@ ATTRS = COMMON_ATTRS | TEST_ATTRS | DOCS_ATTRS
 TOOLCHAINS = COMMON_TOOLCHAINS
 
 def _zig_test_impl(ctx):
-    build = zig_build_impl(ctx, kind = "zig_test")
-    docs = zig_docs_impl(ctx, kind = "zig_test")
-    return build + docs
+    return zig_build_impl(ctx, kind = BINARY_KIND.test)
 
 zig_test = rule(
     _zig_test_impl,
