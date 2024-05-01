@@ -53,10 +53,11 @@ def zig_repository(*, name, zig_version, platform, **kwargs):
       platform: string, The platform that the Zig SDK can execute on, e.g. `x86_64-linux` or `aarch64-macos`.
       **kwargs: Passed to the underlying repository rule.
     """
+    tool = [v for k, v in TOOL_VERSIONS.items() if v.get("version", k) == zig_version][0]
     _zig_repository(
         name = name,
-        url = TOOL_VERSIONS[zig_version][platform].url,
-        integrity = TOOL_VERSIONS[zig_version][platform].integrity,
+        url = tool[platform]["tarball"],
+        sha256 = tool[platform]["shasum"],
         zig_version = zig_version,
         platform = platform,
         **kwargs

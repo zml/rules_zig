@@ -3,14 +3,11 @@
 load(
     "//zig/private/common:zig_build.bzl",
     "BINARY_ATTRS",
+    "DOCS_ATTRS",
     "zig_build_impl",
+    _BINARY_KIND = "BINARY_KIND",
     COMMON_ATTRS = "ATTRS",
     COMMON_TOOLCHAINS = "TOOLCHAINS",
-)
-load(
-    "//zig/private/common:zig_docs.bzl",
-    "zig_docs_impl",
-    DOCS_ATTRS = "ATTRS",
 )
 
 DOC = """\
@@ -40,14 +37,14 @@ zig_binary(
 ```
 """
 
+BINARY_KIND = _BINARY_KIND
+
 ATTRS = COMMON_ATTRS | BINARY_ATTRS | DOCS_ATTRS
 
 TOOLCHAINS = COMMON_TOOLCHAINS
 
 def _zig_binary_impl(ctx):
-    build = zig_build_impl(ctx, kind = "zig_binary")
-    docs = zig_docs_impl(ctx, kind = "zig_binary")
-    return build + docs
+    return zig_build_impl(ctx, kind = ctx.attr.kind)
 
 zig_binary = rule(
     _zig_binary_impl,

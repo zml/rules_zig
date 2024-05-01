@@ -51,6 +51,9 @@ def bazel_builtin_module(ctx):
         srcs = [],
         extra_srcs = [],
         deps = [],
+        copts = [],
+        linkopts = [],
+        cdeps = [],
     )
 
     return module

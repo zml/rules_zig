@@ -1,17 +1,13 @@
 """Common implementation of the zig_binary|library|test rules."""
 
-load("@bazel_skylib//lib:paths.bzl", "paths")
 load(
     "//zig/private/common:bazel_builtin.bzl",
     "bazel_builtin_module",
     BAZEL_BUILTIN_ATTRS = "ATTRS",
 )
-load("//zig/private/common:cdeps.bzl", "zig_cdeps")
-load("//zig/private/common:csrcs.bzl", "zig_csrcs")
 load("//zig/private/common:data.bzl", "zig_collect_data", "zig_create_runfiles")
 load(
     "//zig/private/common:filetypes.bzl",
-    "ZIG_C_SOURCE_EXTENSIONS",
     "ZIG_SOURCE_EXTENSIONS",
 )
 load("//zig/private/common:linker_script.bzl", "zig_linker_script")
@@ -21,7 +17,7 @@ load("//zig/private/common:zig_lib_dir.bzl", "zig_lib_dir")
 load(
     "//zig/private/providers:zig_module_info.bzl",
     "ZigModuleInfo",
-    "zig_module_dependencies",
+    "zig_module_info",
     "zig_module_specifications",
 )
 load(
@@ -29,10 +25,7 @@ load(
     "ZigSettingsInfo",
     "zig_settings",
 )
-load(
-    "//zig/private/providers:zig_target_info.bzl",
-    "zig_target_platform",
-)
+load("//zig/private/providers:zig_target_info.bzl", "zig_target_platform")
 
 ATTRS = {
     "main": attr.label(
@@ -55,11 +48,6 @@ ATTRS = {
         doc = "Other files required to generate documentation, e.g. guides referenced using `//!zig-autodoc-guide:`.",
         mandatory = False,
     ),
-    "csrcs": attr.label_list(
-        allow_files = ZIG_C_SOURCE_EXTENSIONS,
-        doc = "C source files required to build the target.",
-        mandatory = False,
-    ),
     "copts": attr.string_list(
         doc = "C compiler flags required to build the C sources of the target. Subject to location expansion.",
         mandatory = False,
@@ -67,23 +55,6 @@ ATTRS = {
     "deps": attr.label_list(
         doc = "modules required to build the target.",
         mandatory = False,
-        providers = [ZigModuleInfo],
-    ),
-    "cdeps": attr.label_list(
-        doc = """\
-C dependencies providing headers to include and libraries to link against, typically `cc_library` targets.
-
-Note, if you need to include C or C++ standard library headers and encounter errors of the following form:
-
-```
-note: libc headers not available; compilation does not link against libc
-error: 'math.h' file not found
-```
-
-Then you may need to list `@rules_zig//zig/lib:libc` or `@rules_zig//zig/lib:libc++` in this attribute.
-""",
-        mandatory = False,
-        providers = [CcInfo],
     ),
     "linker_script": attr.label(
         doc = "Custom linker script for the target.",
@@ -102,7 +73,30 @@ Then you may need to list `@rules_zig//zig/lib:libc` or `@rules_zig//zig/lib:lib
     ),
 } | BAZEL_BUILTIN_ATTRS
 
+DOCS_ATTRS = {
+    "extra_docs": attr.label_list(
+        allow_files = True,
+        doc = "Other files required to generate documentation, e.g. guides referenced using `//!zig-autodoc-guide:`.",
+        mandatory = False,
+    ),
+}
+
+BINARY_KIND = struct(
+    exe = "exe",
+    static_lib = "static_lib",
+    shared_lib = "shared_lib",
+    obj = "obj",
+    test = "test",
+    test_lib = "test_lib",
+)
+
 BINARY_ATTRS = {
+    "kind": attr.string(
+        doc = "The kind of the target.",
+        default = BINARY_KIND.exe,
+        values = dir(BINARY_KIND),
+        mandatory = True,
+    ),
     "env": attr.string_dict(
         doc = """\
 Additional environment variables to set when executed by `bazel run`.
@@ -134,7 +128,46 @@ TOOLCHAINS = [
     "//zig/target:toolchain_type",
 ]
 
+def _lib_prefix(os):
+    return os == "windows" and "" or "lib"
+
+def _static_lib_extension(os):
+    return os == "windows" and ".lib" or ".a"
+
+def _shared_lib_extension(os):
+    return {
+        "windows": ".dll",
+        "darwin": ".dylib",
+    }.get(os, ".so")
+
+def _executable_extension(os):
+    return os == "windows" and ".exe" or ""
+
+def _create_cc_info_for_lib(owner, actions, cc_infos, **kwargs):
+    return cc_common.merge_cc_infos(
+        direct_cc_infos = [
+            CcInfo(
+                linking_context = cc_common.create_linking_context(
+                    linker_inputs = depset([
+                        cc_common.create_linker_input(
+                            owner = owner,
+                            libraries = depset([
+                                cc_common.create_library_to_link(
+                                    actions = actions,
+                                    **kwargs,
+                                ),
+                            ]),
+                        ),
+                    ]),
+                ),
+            ),
+        ],
+        cc_infos = cc_infos,
+    )
+
+
 def zig_build_impl(ctx, *, kind):
+    # type: (ctx) -> Unknown
     """Common implementation for Zig build rules.
 
     Args:
@@ -147,7 +180,6 @@ def zig_build_impl(ctx, *, kind):
     zigtoolchaininfo = ctx.toolchains["//zig:toolchain_type"].zigtoolchaininfo
     zigtargetinfo = ctx.toolchains["//zig/target:toolchain_type"].zigtargetinfo
 
-    executable = None
     files = None
     direct_data = []
     transitive_data = []
@@ -160,7 +192,7 @@ def zig_build_impl(ctx, *, kind):
 
     zig_collect_data(
         data = ctx.attr.data,
-        deps = ctx.attr.deps + ctx.attr.cdeps,
+        deps = ctx.attr.deps,
         transitive_data = transitive_data,
         transitive_runfiles = transitive_runfiles,
     )
@@ -168,34 +200,27 @@ def zig_build_impl(ctx, *, kind):
     args = ctx.actions.args()
     args.use_param_file("@%s")
 
-    if kind == "zig_binary" or kind == "zig_test":
-        extension = ".exe" if zigtargetinfo.triple.os == "windows" else ""
-        output = ctx.actions.declare_file(ctx.label.name + extension)
-        outputs.append(output)
-        args.add(output, format = "-femit-bin=%s")
-
-        executable = output
-        files = depset([output])
+    output = None
+    if kind in [BINARY_KIND.exe, BINARY_KIND.test]:
+        output = ctx.actions.declare_file(ctx.label.name + _executable_extension(zigtargetinfo.triple.os))
         direct_data.append(output)
-    elif kind == "zig_library":
-        prefix = "" if zigtargetinfo.triple.os == "windows" else "lib"
-        extension = ".lib" if zigtargetinfo.triple.os == "windows" else ".a"
-        static = ctx.actions.declare_file(prefix + ctx.label.name + extension)
-        outputs.append(static)
-        args.add(static, format = "-femit-bin=%s")
-
-        files = depset([static])
-    elif kind == "zig_shared_library":
-        prefix = "" if zigtargetinfo.triple.os == "windows" else "lib"
-        extension = ".dll" if zigtargetinfo.triple.os == "windows" else ".so"
-        dynamic = ctx.actions.declare_file(prefix + ctx.label.name + extension)
-        outputs.append(dynamic)
-        args.add(dynamic, format = "-femit-bin=%s")
-        args.add(dynamic.basename, format = "-fsoname=%s")
-
-        files = depset([dynamic])
+    elif kind == BINARY_KIND.static_lib:
+        output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
+    elif kind == BINARY_KIND.obj:
+        # Use static lib extension until CcInfo.objects is working
+        output = ctx.actions.declare_file(ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
+    elif kind == BINARY_KIND.shared_lib:
+        output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _shared_lib_extension(zigtargetinfo.triple.os))
     else:
         fail("Unknown rule kind '{}'.".format(kind))
+
+    outputs.append(output)
+    args.add(output, format = "-femit-bin=%s")
+
+    if kind == BINARY_KIND.shared_lib:
+        args.add(output.basename, format = "-fsoname=%s")
+
+    files = depset([output])
 
     zig_lib_dir(
         zigtoolchaininfo = zigtoolchaininfo,
@@ -209,48 +234,46 @@ def zig_build_impl(ctx, *, kind):
 
     location_targets = ctx.attr.data
 
-    copts = location_expansion(
-        ctx = ctx,
-        targets = location_targets,
-        outputs = outputs,
-        attribute_name = "copts",
-        strings = ctx.attr.copts,
-    )
-
-    zig_csrcs(
-        copts = copts,
-        csrcs = ctx.files.csrcs,
-        inputs = direct_inputs,
-        args = args,
-    )
-
-    zig_cdeps(
-        cdeps = ctx.attr.cdeps,
-        output_dir = paths.join(ctx.bin_dir.path, ctx.label.package),
-        os = zigtargetinfo.triple.os,
-        direct_inputs = direct_inputs,
-        transitive_inputs = transitive_inputs,
-        args = args,
-        data = direct_data,
-    )
-
     zig_linker_script(
         linker_script = ctx.file.linker_script,
         inputs = direct_inputs,
         args = args,
     )
 
-    direct_inputs.append(ctx.file.main)
-    direct_inputs.extend(ctx.files.srcs)
-    direct_inputs.extend(ctx.files.extra_srcs)
+    zdeps = []
+    cdeps = []
+    for dep in ctx.attr.deps:
+        if ZigModuleInfo in dep:
+            zdeps.append(dep[ZigModuleInfo])
+        elif CcInfo in dep:
+            cdeps.append(dep[CcInfo])
 
     bazel_builtin = bazel_builtin_module(ctx)
 
-    zig_module_dependencies(
-        deps = ctx.attr.deps,
-        extra_deps = [bazel_builtin],
+    root_module = zig_module_info(
+        name = ctx.attr.name,
+        canonical_name = ctx.label.name,
+        main = ctx.file.main,
+        srcs = ctx.files.srcs,
+        extra_srcs = ctx.files.extra_srcs,
+        copts = location_expansion(
+            ctx = ctx,
+            targets = location_targets,
+            outputs = outputs,
+            attribute_name = "copts",
+            strings = ctx.attr.copts,
+        ),
+        linkopts = [],
+        deps = zdeps + [bazel_builtin],
+        cdeps = cdeps,
+    )
+
+    cc_infos = []
+    zig_module_specifications(
+        root_module = root_module,
+        inputs = transitive_inputs,
+        cc_infos = cc_infos,
         args = args,
-        zig_version = zigtoolchaininfo.zig_version,
     )
 
     zig_settings(
@@ -263,39 +286,49 @@ def zig_build_impl(ctx, *, kind):
         args = args,
     )
 
-    if zigtoolchaininfo.zig_version.startswith("0.11."):
-        args.add_all(["--main-pkg-path", "."])
-        args.add(ctx.file.main)
-    else:
-        args.add(ctx.file.main, format = "-M{}=%s".format(ctx.label.name))
-
-    zig_module_specifications(
-        deps = ctx.attr.deps,
-        extra_deps = [bazel_builtin],
-        inputs = transitive_inputs,
-        args = args,
-        zig_version = zigtoolchaininfo.zig_version,
-    )
-
     inputs = depset(
-        direct = direct_inputs,
+        direct = [],
         transitive = transitive_inputs,
         order = "preorder",
     )
 
-    if kind == "zig_binary":
+    providers = []
+
+    if kind == BINARY_KIND.exe:
         arguments = ["build-exe", args]
         mnemonic = "ZigBuildExe"
         progress_message = "Building %{input} as Zig binary %{output}"
-    elif kind == "zig_test":
+    elif kind == BINARY_KIND.test:
         arguments = ["test", "--test-no-exec", args]
         mnemonic = "ZigBuildTest"
         progress_message = "Building %{input} as Zig test %{output}"
-    elif kind == "zig_library":
+    elif kind == BINARY_KIND.static_lib:
         arguments = ["build-lib", args]
         mnemonic = "ZigBuildLib"
         progress_message = "Building %{input} as Zig library %{output}"
-    elif kind == "zig_shared_library":
+        cc_info = _create_cc_info_for_lib(
+            owner = ctx.label,
+            actions = ctx.actions,
+            cc_infos = cc_infos,
+            static_library = output,
+            alwayslink = True,
+        )
+        providers.append(cc_info)
+    elif kind == BINARY_KIND.obj:
+        arguments = ["build-obj", args]
+        mnemonic = "ZigBuildObj"
+        progress_message = "Building %{input} as Zig library %{output}"
+        cc_info = _create_cc_info_for_lib(
+            actions = ctx.actions,
+            owner = ctx.label,
+            cc_infos = cc_infos,
+            # CcInfo.objects doesn't work at the moment
+            # see https://github.com/bazelbuild/bazel/blob/727632539bd58dbcf54a9a52a7da15eb0e7c49e2/src/main/starlark/builtins_bzl/common/cc/cc_common.bzl#L318
+            static_library = output,
+            alwayslink = True,
+        )
+        providers.append(cc_info)
+    elif kind == BINARY_KIND.shared_lib:
         arguments = ["build-lib", "-dynamic", args]
         mnemonic = "ZigBuildSharedLib"
         progress_message = "Building %{input} as Zig shared library %{output}"
@@ -313,10 +346,8 @@ def zig_build_impl(ctx, *, kind):
         execution_requirements = {tag: "" for tag in ctx.attr.tags},
     )
 
-    providers = []
-
     default = DefaultInfo(
-        executable = executable,
+        executable = output,
         files = files,
         runfiles = zig_create_runfiles(
             ctx_runfiles = ctx.runfiles,
@@ -327,7 +358,7 @@ def zig_build_impl(ctx, *, kind):
     )
     providers.append(default)
 
-    if kind in ["zig_binary", "zig_test"]:
+    if kind in [BINARY_KIND.exe, BINARY_KIND.test]:
         run_environment = RunEnvironmentInfo(
             environment = dict(zip(ctx.attr.env.keys(), location_expansion(
                 ctx = ctx,
