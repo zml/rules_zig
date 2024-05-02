@@ -211,25 +211,22 @@ def zig_build_impl(ctx, *, kind):
         output = ctx.actions.declare_file(ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
     elif kind == BINARY_KIND.shared_lib:
         output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _shared_lib_extension(zigtargetinfo.triple.os))
+    elif kind == BINARY_KIND.test_lib:
+        output = ctx.actions.declare_file(ctx.label.name + ".bc")
     else:
         fail("Unknown rule kind '{}'.".format(kind))
 
-    outputs.append(output)
-    args.add(output, format = "-femit-bin=%s")
-
-    if kind == BINARY_KIND.shared_lib:
-        args.add(output.basename, format = "-fsoname=%s")
-
-    files = depset([output])
+    zig_config_args = ctx.actions.args()
+    zig_config_args.use_param_file("@%s")
 
     zig_lib_dir(
         zigtoolchaininfo = zigtoolchaininfo,
-        args = args,
+        args = zig_config_args,
     )
 
     zig_cache_output(
         zigtoolchaininfo = zigtoolchaininfo,
-        args = args,
+        args = zig_config_args,
     )
 
     location_targets = ctx.attr.data
@@ -237,7 +234,7 @@ def zig_build_impl(ctx, *, kind):
     zig_linker_script(
         linker_script = ctx.file.linker_script,
         inputs = direct_inputs,
-        args = args,
+        args = zig_config_args,
     )
 
     zdeps = []
@@ -278,12 +275,12 @@ def zig_build_impl(ctx, *, kind):
 
     zig_settings(
         settings = ctx.attr._settings[ZigSettingsInfo],
-        args = args,
+        args = zig_config_args,
     )
 
     zig_target_platform(
         target = zigtargetinfo,
-        args = args,
+        args = zig_config_args,
     )
 
     inputs = depset(
@@ -294,16 +291,23 @@ def zig_build_impl(ctx, *, kind):
 
     providers = []
 
+
     if kind == BINARY_KIND.exe:
-        arguments = ["build-exe", args]
+        outputs.append(output)
+        args.add(output, format = "-femit-bin=%s")
+        arguments = ["build-exe", zig_config_args, args]
         mnemonic = "ZigBuildExe"
         progress_message = "Building %{input} as Zig binary %{output}"
     elif kind == BINARY_KIND.test:
-        arguments = ["test", "--test-no-exec", args]
+        outputs.append(output)
+        args.add(output, format = "-femit-bin=%s")
+        arguments = ["test", "--test-no-exec", zig_config_args, args]
         mnemonic = "ZigBuildTest"
         progress_message = "Building %{input} as Zig test %{output}"
     elif kind == BINARY_KIND.static_lib:
-        arguments = ["build-lib", args]
+        outputs.append(output)
+        args.add(output, format = "-femit-bin=%s")
+        arguments = ["build-lib", zig_config_args, args]
         mnemonic = "ZigBuildLib"
         progress_message = "Building %{input} as Zig library %{output}"
         cc_info = _create_cc_info_for_lib(
@@ -315,7 +319,9 @@ def zig_build_impl(ctx, *, kind):
         )
         providers.append(cc_info)
     elif kind == BINARY_KIND.obj:
-        arguments = ["build-obj", args]
+        outputs.append(output)
+        args.add(output, format = "-femit-bin=%s")
+        arguments = ["build-obj", zig_config_args, args]
         mnemonic = "ZigBuildObj"
         progress_message = "Building %{input} as Zig library %{output}"
         cc_info = _create_cc_info_for_lib(
@@ -329,9 +335,18 @@ def zig_build_impl(ctx, *, kind):
         )
         providers.append(cc_info)
     elif kind == BINARY_KIND.shared_lib:
-        arguments = ["build-lib", "-dynamic", args]
+        outputs.append(output)
+        args.add(output, format = "-femit-bin=%s")
+        args.add(output.basename, format = "-fsoname=%s")
+        arguments = ["build-lib", "-dynamic", zig_config_args, args]
         mnemonic = "ZigBuildSharedLib"
         progress_message = "Building %{input} as Zig shared library %{output}"
+    elif kind == BINARY_KIND.test_lib:
+        outputs.append(output)
+        args.add(output, format = "-femit-llvm-bc=%s")
+        arguments = ["test", "-fno-emit-bin", zig_config_args, args]
+        mnemonic = "ZigBuildTestLib"
+        progress_message = "Building %{input} as Zig test library %{output}"
     else:
         fail("Unknown rule kind '{}'.".format(kind))
 
@@ -346,6 +361,32 @@ def zig_build_impl(ctx, *, kind):
         execution_requirements = {tag: "" for tag in ctx.attr.tags},
     )
 
+    if kind == BINARY_KIND.test_lib:
+        bcinput = output
+        output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
+        libargs = ctx.actions.args()
+        libargs.add(output, format = "-femit-bin=%s")
+        libargs.add(bcinput)
+        ctx.actions.run(
+            outputs = [output],
+            inputs = [bcinput],
+            executable = zigtoolchaininfo.zig_exe_path,
+            tools = zigtoolchaininfo.zig_files,
+            arguments = ["build-lib", zig_config_args, libargs],
+            mnemonic = mnemonic,
+            progress_message = progress_message,
+            execution_requirements = {tag: "" for tag in ctx.attr.tags},
+        )
+        cc_info = _create_cc_info_for_lib(
+            owner = ctx.label,
+            actions = ctx.actions,
+            cc_infos = cc_infos,
+            static_library = output,
+            alwayslink = True,
+        )
+        providers.append(cc_info)
+
+    files = depset([output])
     default = DefaultInfo(
         executable = output,
         files = files,
