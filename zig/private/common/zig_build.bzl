@@ -31,7 +31,7 @@ ATTRS = {
     "main": attr.label(
         allow_single_file = ZIG_SOURCE_EXTENSIONS,
         doc = "The main source file.",
-        mandatory = True,
+        mandatory = False,
     ),
     "srcs": attr.label_list(
         allow_files = ZIG_SOURCE_EXTENSIONS,
@@ -245,25 +245,28 @@ def zig_build_impl(ctx, *, kind):
         elif CcInfo in dep:
             cdeps.append(dep[CcInfo])
 
-    bazel_builtin = bazel_builtin_module(ctx)
-
-    root_module = zig_module_info(
-        name = ctx.attr.name,
-        canonical_name = ctx.label.name,
-        main = ctx.file.main,
-        srcs = ctx.files.srcs,
-        extra_srcs = ctx.files.extra_srcs,
-        copts = location_expansion(
-            ctx = ctx,
-            targets = location_targets,
-            outputs = outputs,
-            attribute_name = "copts",
-            strings = ctx.attr.copts,
-        ),
-        linkopts = [],
-        deps = zdeps + [bazel_builtin],
-        cdeps = cdeps,
-    )
+    root_module = None
+    if not ctx.attr.main and len(zdeps) == 1:
+        root_module = zdeps[0]
+    else:
+        bazel_builtin = bazel_builtin_module(ctx)
+        root_module = zig_module_info(
+            name = ctx.attr.name,
+            canonical_name = ctx.label.name,
+            main = ctx.file.main,
+            srcs = ctx.files.srcs,
+            extra_srcs = ctx.files.extra_srcs,
+            copts = location_expansion(
+                ctx = ctx,
+                targets = location_targets,
+                outputs = outputs,
+                attribute_name = "copts",
+                strings = ctx.attr.copts,
+            ),
+            linkopts = [],
+            deps = zdeps + [bazel_builtin],
+            cdeps = cdeps,
+        )
 
     cc_infos = []
     zig_module_specifications(
