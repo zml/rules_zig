@@ -43,6 +43,11 @@ ATTRS = {
         mandatory = False,
         allow_files = True,
     ),
+    "zig_h": attr.label(
+        doc = "zig.h header file",
+        mandatory = True,
+        allow_single_file = True,
+    ),
     "zig_lib_path": attr.string(
         doc = "Absolute path to an existing Zig library for the target platform or a the path to a hermetically downloaded Zig library relative to the Zig executable.",
         mandatory = False,
@@ -138,6 +143,13 @@ def _zig_toolchain_impl(ctx):
     zigtoolchaininfo = ZigToolchainInfo(
         zig_exe_path = zig_exe_path,
         zig_lib_path = zig_lib_path,
+        zig_hdrs_ccinfo = CcInfo(
+            compilation_context = cc_common.create_compilation_context(
+                headers = depset([ctx.file.zig_h]),
+                quote_includes = depset([ctx.file.zig_h.dirname]),
+                defines = depset(["ZIG_TARGET_MAX_INT_ALIGNMENT=_Alignof(struct { long long __ll; long double __ld; })"]),
+            ),
+        ),
         zig_files = zig_files,
         zig_version = zig_version,
         zig_cache = zig_cache,
