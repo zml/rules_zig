@@ -307,9 +307,11 @@ def zig_build_impl(ctx, *, kind):
     elif kind == BINARY_KIND.static_lib:
         outputs.append(output)
         args.add(output, format = "-femit-bin=%s")
-        header = ctx.actions.declare_file(ctx.label.name + ".h")
-        outputs.append(header)
-        args.add(header, format = "-femit-h=%s")
+        # Disabled until https://github.com/ziglang/zig/issues/18188 is fixed
+        header = None
+        # header = ctx.actions.declare_file(ctx.label.name + ".h")
+        # outputs.append(header)
+        # args.add(header, format = "-femit-h=%s")
         arguments = ["build-lib", zig_config_args, args]
         mnemonic = "ZigBuildLib"
         progress_message = "Building %{input} as Zig library %{output}"
@@ -325,9 +327,11 @@ def zig_build_impl(ctx, *, kind):
     elif kind == BINARY_KIND.obj:
         outputs.append(output)
         args.add(output, format = "-femit-bin=%s")
-        header = ctx.actions.declare_file(ctx.label.name + ".h")
-        outputs.append(header)
-        args.add(header, format = "-femit-h=%s")
+        # Disabled until https://github.com/ziglang/zig/issues/18188 is fixed
+        header = None
+        # header = ctx.actions.declare_file(ctx.label.name + ".h")
+        # outputs.append(header)
+        # args.add(header, format = "-femit-h=%s")
         arguments = ["build-obj", zig_config_args, args]
         mnemonic = "ZigBuildObj"
         progress_message = "Building %{input} as Zig library %{output}"
