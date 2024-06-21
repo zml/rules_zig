@@ -81,8 +81,7 @@ load("@rules_zig//zig:toolchain.bzl", "zig_toolchain")
 zig_toolchain(
     name = "zig_toolchain",
     zig_exe = {zig_exe},
-    zig_lib = glob(["lib/**"]),
-    zig_lib_path = "lib",
+    zig_lib = "lib",
     zig_h = "lib/zig.h",
     zig_version = {zig_version},
     zig_cache = {zig_cache},

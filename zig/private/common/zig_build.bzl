@@ -365,8 +365,8 @@ def zig_build_impl(ctx, *, kind):
     ctx.actions.run(
         outputs = outputs,
         inputs = inputs,
-        executable = zigtoolchaininfo.zig_exe_path,
-        tools = zigtoolchaininfo.zig_files,
+        executable = zigtoolchaininfo.zig_exe,
+        tools = [zigtoolchaininfo.zig_lib],
         arguments = arguments,
         mnemonic = mnemonic,
         progress_message = progress_message,
@@ -382,8 +382,8 @@ def zig_build_impl(ctx, *, kind):
         ctx.actions.run(
             outputs = [output],
             inputs = [bcinput],
-            executable = zigtoolchaininfo.zig_exe_path,
-            tools = zigtoolchaininfo.zig_files,
+            executable = zigtoolchaininfo.zig_exe,
+            tools = [zigtoolchaininfo.zig_lib],
             arguments = ["build-lib", zig_config_args, libargs],
             mnemonic = mnemonic,
             progress_message = progress_message,
