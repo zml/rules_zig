@@ -31,7 +31,7 @@ ZigModuleInfo = provider(
 def zig_module_info(*, name, canonical_name, main, srcs, extra_srcs, copts, linkopts, deps, cdeps):
     module = ZigModuleInfo(
         name = name,
-        canonical_name = canonical_name or name,
+        canonical_name = canonical_name,
         main = main,
         srcs = tuple(srcs),
         extra_srcs = tuple(extra_srcs),

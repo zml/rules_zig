@@ -47,6 +47,10 @@ ATTRS = {
         doc = "The main source file.",
         mandatory = True,
     ),
+    "import_name": attr.string(
+        doc = "The import name of the module.",
+        mandatory = False,
+    ),
     "srcs": attr.label_list(
         allow_files = ZIG_SOURCE_EXTENSIONS,
         doc = "Other Zig source files required when building the module, e.g. files imported using `@import`.",
@@ -108,8 +112,8 @@ def _zig_module_impl(ctx):
             cdeps.append(dep[CcInfo])
 
     module = zig_module_info(
-        name = ctx.label.name,
-        canonical_name = ctx.label.name,
+        name = ctx.attr.import_name or ctx.label.name,
+        canonical_name = str(ctx.label),
         main = ctx.file.main,
         srcs = ctx.files.srcs,
         extra_srcs = ctx.files.extra_srcs,
