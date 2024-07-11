@@ -190,7 +190,6 @@ def zig_build_impl(ctx, *, kind):
 
     outputs = []
 
-    direct_inputs = []
     transitive_inputs = []
 
     zig_collect_data(
@@ -290,7 +289,6 @@ def zig_build_impl(ctx, *, kind):
     )
 
     providers = []
-
 
     if kind == BINARY_KIND.exe:
         outputs.append(output)
@@ -410,6 +408,10 @@ def zig_build_impl(ctx, *, kind):
         ),
     )
     providers.append(default)
+
+    providers.append(OutputGroupInfo(
+        srcs = inputs,
+    ))
 
     if kind in [BINARY_KIND.exe, BINARY_KIND.test]:
         run_environment = RunEnvironmentInfo(
