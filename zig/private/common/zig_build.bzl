@@ -87,6 +87,7 @@ BINARY_KIND = struct(
     obj = "obj",
     test = "test",
     test_lib = "test_lib",
+    asm = "asm",
 )
 
 BINARY_ATTRS = {
@@ -215,6 +216,8 @@ def zig_build_impl(ctx, *, kind):
         output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _shared_lib_extension(zigtargetinfo.triple.os))
     elif kind == BINARY_KIND.test_lib:
         output = ctx.actions.declare_file(ctx.label.name + ".bc")
+    elif kind == BINARY_KIND.asm:
+        output = ctx.actions.declare_file(ctx.label.name + ".s")
     else:
         fail("Unknown rule kind '{}'.".format(kind))
 
@@ -354,9 +357,16 @@ def zig_build_impl(ctx, *, kind):
     elif kind == BINARY_KIND.test_lib:
         outputs.append(output)
         args.add(output, format = "-femit-llvm-bc=%s")
-        arguments = ["test", "-fno-emit-bin", zig_config_args, args]
+        arguments = ["test", "-fno-emit-bin", "--color", "on", "-freference-trace=10", zig_config_args, args]
         mnemonic = "ZigBuildTestLib"
         progress_message = "Building %{input} as Zig test library %{output}"
+    elif kind == BINARY_KIND.asm:
+        outputs.append(output)
+        args.add("-fno-emit-bin")
+        args.add(output, format = "-femit-asm=%s")
+        arguments = ["build-obj", zig_config_args, args]
+        mnemonic = "ZigBuildAsm"
+        progress_message = "Building %{input} as Zig library %{output}"
     else:
         fail("Unknown rule kind '{}'.".format(kind))
 

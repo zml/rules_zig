@@ -211,10 +211,11 @@ test "RepoMapping init from file" {
         try tmp.dir.writeFile(.{
             .sub_path = "_repo_mapping",
             .data =
-                \\,my_module,my_workspace
-                \\,my_protobuf,protobuf~3.19.2
-                \\,my_workspace,my_workspace
-                \\protobuf~3.19.2,protobuf,protobuf~3.19.2
+            \\,my_module,my_workspace
+            \\,my_protobuf,protobuf~3.19.2
+            \\,my_workspace,my_workspace
+            \\protobuf~3.19.2,protobuf,protobuf~3.19.2
+            ,
         });
     }
     const mapping_path = try tmp.dir.realpathAlloc(std.testing.allocator, "_repo_mapping");

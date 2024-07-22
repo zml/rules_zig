@@ -156,8 +156,9 @@ test "RunfilesManifest init unmapped lookup" {
         try tmp.dir.writeFile(.{
             .sub_path = "test.runfiles_manifest",
             .data =
-                \\my_workspace/some/package/some_file /absolute/path/to/some/package/some_file
-                \\_repo_mapping /absolute/path/to/_repo_mapping
+            \\my_workspace/some/package/some_file /absolute/path/to/some/package/some_file
+            \\_repo_mapping /absolute/path/to/_repo_mapping
+            ,
         });
     }
 

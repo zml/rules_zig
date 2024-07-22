@@ -287,9 +287,10 @@ test "Runfiles from manifest" {
         try tmp.dir.writeFile(.{
             .sub_path = "test.repo_mapping",
             .data =
-                \\,my_module,my_workspace
-                \\,other_module,other~3.4.5
-                \\their_module~1.2.3,another_module,other~3.4.5
+            \\,my_module,my_workspace
+            \\,other_module,other~3.4.5
+            \\their_module~1.2.3,another_module,other~3.4.5
+            ,
         });
         try tmp.dir.writeFile(.{
             .sub_path = "some/package/some_file",
@@ -393,9 +394,10 @@ test "Runfiles from directory" {
         try tmp.dir.writeFile(.{
             .sub_path = "test.repo_mapping",
             .data =
-                \\,my_module,my_workspace
-                \\,other_module,other~3.4.5
-                \\their_module~1.2.3,another_module,other~3.4.5
+            \\,my_module,my_workspace
+            \\,other_module,other~3.4.5
+            \\their_module~1.2.3,another_module,other~3.4.5
+            ,
         });
         try tmp.dir.writeFile(.{
             .sub_path = "some/package/some_file",
