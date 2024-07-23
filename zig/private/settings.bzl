@@ -44,7 +44,10 @@ THREADED_VALUES = ["multi", "single"]
 def _settings_impl(ctx):
     args = []
 
-    mode = ctx.attr.mode[BuildSettingInfo].value
+    mode = {
+        "dbg": "debug",
+        "opt": "release_safe",
+    }.get(ctx.var["COMPILATION_MODE"], ctx.attr.mode[BuildSettingInfo].value)
     args.extend(MODE_ARGS[mode])
 
     threaded = ctx.attr.threaded[BuildSettingInfo].value
