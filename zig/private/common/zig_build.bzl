@@ -26,6 +26,7 @@ load(
     "zig_settings",
 )
 load("//zig/private/providers:zig_target_info.bzl", "zig_target_platform")
+load("//zig/private/common:zig_translate_c.bzl", "zig_translate_c")
 
 ATTRS = {
     "main": attr.label(
@@ -262,16 +263,24 @@ def zig_build_impl(ctx, *, kind):
                 attribute_name = "copts",
                 strings = ctx.attr.copts,
             ),
-            linkopts = [],
+            linkopts = ctx.attr.linkopts,
             deps = zdeps + [bazel_builtin],
             cdeps = cdeps,
         )
 
-    cc_infos = [zigtoolchaininfo.zig_hdrs_ccinfo]
+    cc_infos = root_module.transitive_cdeps.to_list()
+
+    c_module = zig_translate_c(
+        ctx = ctx,
+        zigtoolchaininfo = zigtoolchaininfo,
+        zig_config_args = zig_config_args,
+        cc_infos = cc_infos,
+    )
+
     zig_module_specifications(
         root_module = root_module,
         inputs = transitive_inputs,
-        cc_infos = cc_infos,
+        c_module = c_module,
         args = args,
     )
 
