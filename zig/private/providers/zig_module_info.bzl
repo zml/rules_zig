@@ -49,7 +49,7 @@ def zig_module_info(*, name, canonical_name, main, srcs = [], extra_srcs = [], c
 def _render_dep(dep):
     return dep.name + "=" + dep.canonical_name
 
-def _add_module_files(inputs, module):
+def add_module_files(inputs, module):
     inputs.append(depset(direct = tuple((module.main,)) + module.srcs + module.extra_srcs))
 
 def zig_module_render_args(*, module, inputs, c_module, args):
@@ -59,7 +59,7 @@ def zig_module_render_args(*, module, inputs, c_module, args):
     args.add_all(module.copts)
 
     args.add(module.main, format = "-M{}=%s".format(module.canonical_name))
-    _add_module_files(inputs, module)
+    add_module_files(inputs, module)
 
 def zig_module_specifications(*, root_module, inputs, c_module, args):
     need_c_module = (len(root_module.cdeps) > 0)
