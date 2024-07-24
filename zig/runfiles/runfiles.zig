@@ -9,9 +9,34 @@
 //!
 //!zig-autodoc-guide: guide.md
 
+const builtin = @import("builtin");
 const std = @import("std");
 
 pub const Runfiles = @import("src/Runfiles.zig");
+
+/// Ensure argv and env are available to the standard library when built as a
+/// library.
+const init_array_section = switch (builtin.object_format) {
+    .macho => "__DATA,__init_array",
+    .elf => ".init_array",
+    else => "",
+};
+
+const fix_argv linksection(init_array_section) = &struct{
+    pub fn call(argc: c_int, argv: [*c][*:0]u8, envp: [*:null]?[*:0]u8) callconv(.C) void {
+        std.os.argv = argv[0..@intCast(argc)];
+        std.os.environ = @ptrCast(envp[0..std.mem.len(envp)]);
+    }
+}.call;
+
+comptime {
+    if (builtin.output_mode != .Exe) {
+        switch (builtin.object_format) {
+            .elf, .macho => _ = fix_argv,
+            else => {},
+        }
+    }
+}
 
 test {
     _ = @import("src/Directory.zig");
