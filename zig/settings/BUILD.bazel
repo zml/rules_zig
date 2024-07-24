@@ -1,29 +1,32 @@
-load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load(
     "//zig/private:settings.bzl",
     "MODE_VALUES",
-    "THREADED_VALUES",
     "settings",
 )
 
 settings(
     name = "settings",
     mode = ":mode",
-    threaded = ":threaded",
+    single_threaded = ":single_threaded",
+    strip = select({
+        "//zig/config/mode:is_strip_always": True,
+        "//zig/config/mode:is_strip_sometimes_fastbuild": True,
+        "//conditions:default": False,
+    }),
     visibility = ["//visibility:public"],
 )
 
 string_flag(
     name = "mode",
-    build_setting_default = "debug",
+    build_setting_default = "auto",
     values = MODE_VALUES,
     visibility = ["//zig/config/mode:__pkg__"],
 )
 
-string_flag(
-    name = "threaded",
-    build_setting_default = "multi",
-    values = THREADED_VALUES,
+bool_flag(
+    name = "single_threaded",
+    build_setting_default = False,
     visibility = ["//zig/config/threaded:__pkg__"],
 )
 

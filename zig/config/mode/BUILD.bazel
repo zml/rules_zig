@@ -26,6 +26,21 @@ config_setting(
     },
 )
 
+config_setting(
+    name = "is_strip_always",
+    values = {
+        "strip": "always",
+    },
+)
+
+config_setting(
+    name = "is_strip_sometimes_fastbuild",
+    values = {
+        "strip": "sometimes",
+        "compilation_mode": "fastbuild",
+    },
+)
+
 # Execute `bazel run //util:update_filegroups` to update this target.
 filegroup(
     name = "all_files",

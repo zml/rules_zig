@@ -1,7 +1,7 @@
 """Implementation of the zig_configure rule."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("//zig/private:settings.bzl", "MODE_VALUES", "THREADED_VALUES")
+load("//zig/private:settings.bzl", "MODE_VALUES")
 
 DOC = """\
 Transitions a target and its dependencies to a different configuration.
@@ -107,7 +107,7 @@ def _zig_transition_impl(settings, attr):
     if attr.mode:
         result["//zig/settings:mode"] = attr.mode
     if attr.threaded:
-        result["//zig/settings:threaded"] = attr.threaded
+        result["//zig/settings:single_threaded"] = attr.threaded
     return result
 
 _zig_transition = transition(
@@ -116,13 +116,13 @@ _zig_transition = transition(
         "//command_line_option:platforms",
         "@zig_toolchains//:version",
         "//zig/settings:mode",
-        "//zig/settings:threaded",
+        "//zig/settings:single_threaded",
     ],
     outputs = [
         "//command_line_option:platforms",
         "@zig_toolchains//:version",
         "//zig/settings:mode",
-        "//zig/settings:threaded",
+        "//zig/settings:single_threaded",
     ],
 )
 
@@ -147,10 +147,9 @@ def _make_attrs(*, executable):
             mandatory = False,
             values = MODE_VALUES,
         ),
-        "threaded": attr.string(
+        "single_threaded": attr.bool(
             doc = "The threaded setting, corresponds to the `-fsingle-threaded` Zig compiler flag.",
             mandatory = False,
-            values = THREADED_VALUES,
         ),
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",

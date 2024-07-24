@@ -16,46 +16,52 @@ capturing all configured Zig build settings.
 
 ATTRS = {
     "mode": attr.label(
-        doc = "The build mode setting.",
+        doc = "The release mode setting.",
         mandatory = True,
     ),
-    "threaded": attr.label(
-        doc = "The Zig multi- or single-threaded setting.",
+    "single_threaded": attr.label(
+        doc = "The Zig single-threaded setting.",
+        mandatory = True,
+    ),
+    "strip": attr.bool(
+        doc = "The strip setting.",
         mandatory = True,
     ),
 }
 
-MODE_ARGS = {
-    "debug": ["-O", "Debug"],
-    "release_safe": ["-O", "ReleaseSafe"],
-    "release_small": ["-O", "ReleaseSmall"],
-    "release_fast": ["-O", "ReleaseFast"],
-}
-
-MODE_VALUES = ["debug", "release_safe", "release_small", "release_fast"]
-
-THREADED_ARGS = {
-    "multi": ["-fno-single-threaded"],
-    "single": ["-fsingle-threaded"],
-}
-
-THREADED_VALUES = ["multi", "single"]
+MODE_VALUES = ["auto", "debug", "release_safe", "release_small", "release_fast"]
 
 def _settings_impl(ctx):
-    args = []
+    args = [
+        "--build-id=sha1",
+    ]
 
-    mode = {
-        "dbg": "debug",
-        "opt": "release_safe",
-    }.get(ctx.var["COMPILATION_MODE"], ctx.attr.mode[BuildSettingInfo].value)
-    args.extend(MODE_ARGS[mode])
+    mode = ctx.attr.mode[BuildSettingInfo].value
+    if (mode == "auto"):
+        mode = ctx.var["COMPILATION_MODE"] == "opt" and "release_safe" or "debug"
+    args.extend(["-O",{
+        "debug": "Debug",
+        "release_safe": "ReleaseSafe",
+        "release_small": "ReleaseSmall",
+        "release_fast": "ReleaseFast",
+    }[mode]])
 
-    threaded = ctx.attr.threaded[BuildSettingInfo].value
-    args.extend(THREADED_ARGS[threaded])
+    strip = ctx.attr.strip
+    if (strip):
+        args.append("-fstrip")
+    else:
+        args.append("-fno-strip")
+
+    single_threaded = ctx.attr.single_threaded[BuildSettingInfo].value
+    if (single_threaded):
+        args.append("-fsingle-threaded")
+    else:
+        args.append("-fno-single-threaded")
 
     settings_info = ZigSettingsInfo(
         mode = mode,
-        threaded = threaded,
+        single_threaded = single_threaded,
+        strip = strip,
         args = args,
     )
 

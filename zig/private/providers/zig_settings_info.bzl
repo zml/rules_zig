@@ -5,8 +5,9 @@ Collection of all active Zig build settings.
 """
 
 FIELDS = {
-    "mode": "The Zig build mode.",
-    "threaded": "The Zig multi- or single-threaded setting.",
+    "mode": "The Zig build mode setting.",
+    "single_threaded": "The Zig single-threaded setting.",
+    "strip": "The strip setting.",
     "args": "The collected compiler arguments for all active settings.",
 }
 
