@@ -15,6 +15,7 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
 
     args = ctx.actions.args()
     args.add(hdr)
+    args.add("-lc")
     args.add_all(compilation_context.defines, format_each = "-D%s")
     args.add_all(compilation_context.includes, format_each = "-I%s")
 
