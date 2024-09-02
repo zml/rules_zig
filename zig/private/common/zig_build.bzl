@@ -30,7 +30,7 @@ load("//zig/private/common:zig_translate_c.bzl", "zig_translate_c")
 
 ATTRS = {
     "main": attr.label(
-        allow_single_file = ZIG_SOURCE_EXTENSIONS,
+        allow_single_file = True,
         doc = "The main source file.",
         mandatory = False,
     ),

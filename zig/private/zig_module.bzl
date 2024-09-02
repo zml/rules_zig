@@ -43,7 +43,7 @@ zig_module(
 
 ATTRS = {
     "main": attr.label(
-        allow_single_file = ZIG_SOURCE_EXTENSIONS,
+        allow_single_file = True,
         doc = "The main source file.",
         mandatory = True,
     ),
