@@ -293,17 +293,14 @@ def zig_build_impl(ctx, *, kind):
         target = zigtargetinfo,
         args = zig_config_args,
     )
-    
+
     inputs = depset(
         direct = [],
-        transitive = transitive_data + transitive_inputs,
+        transitive = transitive_inputs,
         order = "preorder",
     )
 
     providers = []
-    
-    for arg in ctx.attr.args:
-        args.add(arg)
 
     if kind == BINARY_KIND.exe:
         outputs.append(output)
