@@ -366,7 +366,7 @@ def zig_build_impl(ctx, *, kind):
     elif kind == BINARY_KIND.test_lib:
         outputs.append(output)
         args.add(output, format = "-femit-llvm-bc=%s")
-        arguments = ["test", "-fno-emit-bin", "--color", "on", "-freference-trace=10", zig_config_args, args]
+        arguments = ["test", "-fno-emit-bin", zig_config_args, args]
         mnemonic = "ZigBuildTestLib"
         progress_message = "Building %{input} as Zig test library %{output}"
     elif kind == BINARY_KIND.asm:
@@ -378,6 +378,12 @@ def zig_build_impl(ctx, *, kind):
         progress_message = "Building %{input} as Zig library %{output}"
     else:
         fail("Unknown rule kind '{}'.".format(kind))
+
+    # Currently Zig don't output reference trace if color aren't enabled,
+    # and Bazel running `zig` outside of a terminal disable colors by default.
+    # Waiting on PR to enable reference trace without colors.
+    # https://github.com/ziglang/zig/pull/20338
+    arguments.extend(["--color", "on", "-freference-trace=10"])
 
     ctx.actions.run(
         outputs = outputs,

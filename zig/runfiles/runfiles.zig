@@ -22,7 +22,7 @@ const init_array_section = switch (builtin.object_format) {
     else => "",
 };
 
-const fix_argv linksection(init_array_section) = &struct{
+const fix_argv linksection(init_array_section) = &struct {
     pub fn call(argc: c_int, argv: [*c][*:0]u8, envp: [*:null]?[*:0]u8) callconv(.C) void {
         std.os.argv = argv[0..@intCast(argc)];
         std.os.environ = @ptrCast(envp[0..std.mem.len(envp)]);
