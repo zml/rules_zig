@@ -18,6 +18,7 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
     args.add("-lc")
     args.add_all(compilation_context.defines, format_each = "-D%s")
     args.add_all(compilation_context.includes, format_each = "-I%s")
+    args.add("-I.")
 
     args.add_all(compilation_context.quote_includes, format_each = "-I%s")
     args.add_all(compilation_context.system_includes, before_each = "-isystem")
