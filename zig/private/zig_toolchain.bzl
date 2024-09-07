@@ -37,9 +37,14 @@ ATTRS = {
         allow_single_file = True,
     ),
     "zig_lib": attr.label(
-        doc = "Files of a hermetically downloaded Zig library for the target platform.",
+        doc = "Path of a hermetically downloaded Zig library for the target platform.",
         mandatory = True,
         allow_single_file = True,
+    ),
+    "zig_lib_srcs": attr.label_list(
+        doc = "Files of a hermetically downloaded Zig library for the target platform.",
+        mandatory = True,
+        allow_files = True,
     ),
     "zig_h": attr.label(
         doc = "zig.h header file",
@@ -59,7 +64,7 @@ ATTRS = {
 def _zig_toolchain_impl(ctx):
     zig_version = ctx.attr.zig_version
     zig_cache = ctx.attr.zig_cache
-    zig_files = depset(direct = [ctx.file.zig_exe, ctx.file.zig_lib])
+    zig_files = depset(direct = ctx.files.zig_lib_srcs + [ctx.file.zig_exe])
 
     # Make the $(tool_BIN) variable available in places like genrules.
     # See https://docs.bazel.build/versions/main/be/make-variables.html#custom_variables
@@ -75,7 +80,8 @@ def _zig_toolchain_impl(ctx):
 
     zigtoolchaininfo = ZigToolchainInfo(
         zig_exe = ctx.executable.zig_exe,
-        zig_lib = ctx.file.zig_lib,
+        zig_lib_path = ctx.file.zig_lib.path,
+        zig_files = zig_files,
         zig_hdrs_ccinfo = CcInfo(
             compilation_context = cc_common.create_compilation_context(
                 headers = depset([ctx.file.zig_h]),

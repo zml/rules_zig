@@ -82,6 +82,7 @@ zig_toolchain(
     name = "zig_toolchain",
     zig_exe = {zig_exe},
     zig_lib = "lib",
+    zig_lib_srcs = glob(["lib/**"]),
     zig_h = "lib/zig.h",
     zig_version = {zig_version},
     zig_cache = {zig_cache},

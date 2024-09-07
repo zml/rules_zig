@@ -29,15 +29,13 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
 
     inputs = depset(direct = [hdr], transitive = [compilation_context.headers])
     ctx.actions.run_shell(
-        command = "exec ${{@}} > {}".format(zig_out.path),
+        command = "e ${{@}} > {}".format(zig_out.path),
         inputs = inputs,
         outputs = [zig_out],
         arguments = [zigtoolchaininfo.zig_exe.path, "translate-c", zig_config_args, args],
         progress_message = "zig translate-c {}".format(ctx.label.name),
-        tools = [
-            zigtoolchaininfo.zig_exe,
-            zigtoolchaininfo.zig_lib,
-        ],
+        tools = zigtoolchaininfo.zig_files,
+        toolchain = "//zig:toolchain_type",
     )
 
     return zig_module_info(

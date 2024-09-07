@@ -383,11 +383,12 @@ def zig_build_impl(ctx, *, kind):
         outputs = outputs,
         inputs = inputs,
         executable = zigtoolchaininfo.zig_exe,
-        tools = [zigtoolchaininfo.zig_lib],
         arguments = arguments,
         mnemonic = mnemonic,
         progress_message = progress_message,
         execution_requirements = {tag: "" for tag in ctx.attr.tags},
+        tools = zigtoolchaininfo.zig_files,
+        toolchain = "//zig:toolchain_type",
     )
 
     if kind == BINARY_KIND.test_lib:
@@ -400,11 +401,12 @@ def zig_build_impl(ctx, *, kind):
             outputs = [output],
             inputs = [bcinput],
             executable = zigtoolchaininfo.zig_exe,
-            tools = [zigtoolchaininfo.zig_lib],
             arguments = ["build-lib", zig_config_args, libargs],
             mnemonic = mnemonic,
             progress_message = progress_message,
             execution_requirements = {tag: "" for tag in ctx.attr.tags},
+            tools = zigtoolchaininfo.zig_files,
+            toolchain = "//zig:toolchain_type",
         )
         cc_info = _create_cc_info_for_lib(
             owner = ctx.label,
