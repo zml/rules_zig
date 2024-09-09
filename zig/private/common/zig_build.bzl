@@ -10,10 +10,10 @@ load(
     "//zig/private/common:filetypes.bzl",
     "ZIG_SOURCE_EXTENSIONS",
 )
-load("//zig/private/common:linker_script.bzl", "zig_linker_script")
 load("//zig/private/common:location_expansion.bzl", "location_expansion")
 load("//zig/private/common:zig_cache.bzl", "zig_cache_output")
 load("//zig/private/common:zig_lib_dir.bzl", "zig_lib_dir")
+load("//zig/private/common:zig_translate_c.bzl", "zig_translate_c")
 load(
     "//zig/private/providers:zig_module_info.bzl",
     "ZigModuleInfo",
@@ -26,7 +26,6 @@ load(
     "zig_settings",
 )
 load("//zig/private/providers:zig_target_info.bzl", "zig_target_platform")
-load("//zig/private/common:zig_translate_c.bzl", "zig_translate_c")
 
 ATTRS = {
     "main": attr.label(
@@ -42,6 +41,11 @@ ATTRS = {
     "extra_srcs": attr.label_list(
         allow_files = True,
         doc = "Other files required to build the target, e.g. files embedded using `@embedFile`.",
+        mandatory = False,
+    ),
+    "test_runner": attr.label(
+        allow_single_file = True,
+        doc = "Optional Zig file to specify a custom test runner",
         mandatory = False,
     ),
     "extra_docs": attr.label_list(
@@ -159,7 +163,7 @@ def _create_cc_info_for_lib(owner, actions, cc_infos, header = None, **kwargs):
                             libraries = depset([
                                 cc_common.create_library_to_link(
                                     actions = actions,
-                                    **kwargs,
+                                    **kwargs
                                 ),
                             ]),
                         ),
@@ -169,7 +173,6 @@ def _create_cc_info_for_lib(owner, actions, cc_infos, header = None, **kwargs):
         ],
         cc_infos = cc_infos,
     )
-
 
 def zig_build_impl(ctx, *, kind):
     # type: (ctx) -> Unknown
@@ -224,6 +227,7 @@ def zig_build_impl(ctx, *, kind):
 
     zig_config_args = ctx.actions.args()
     zig_config_args.use_param_file("@%s")
+
 
     zig_lib_dir(
         zigtoolchaininfo = zigtoolchaininfo,
@@ -311,14 +315,18 @@ def zig_build_impl(ctx, *, kind):
     elif kind == BINARY_KIND.test:
         outputs.append(output)
         args.add(output, format = "-femit-bin=%s")
+        if ctx.attr.test_runner:
+            args.add("--test-runner", ctx.file.test_runner)
         arguments = ["test", "--test-no-exec", zig_config_args, args]
         mnemonic = "ZigBuildTest"
         progress_message = "Building %{input} as Zig test %{output}"
     elif kind == BINARY_KIND.static_lib:
         outputs.append(output)
         args.add(output, format = "-femit-bin=%s")
+
         # Disabled until https://github.com/ziglang/zig/issues/18188 is fixed
         header = None
+
         # header = ctx.actions.declare_file(ctx.label.name + ".h")
         # outputs.append(header)
         # args.add(header, format = "-femit-h=%s")
@@ -337,8 +345,10 @@ def zig_build_impl(ctx, *, kind):
     elif kind == BINARY_KIND.obj:
         outputs.append(output)
         args.add(output, format = "-femit-bin=%s")
+
         # Disabled until https://github.com/ziglang/zig/issues/18188 is fixed
         header = None
+
         # header = ctx.actions.declare_file(ctx.label.name + ".h")
         # outputs.append(header)
         # args.add(header, format = "-femit-h=%s")
@@ -366,6 +376,8 @@ def zig_build_impl(ctx, *, kind):
     elif kind == BINARY_KIND.test_lib:
         outputs.append(output)
         args.add(output, format = "-femit-llvm-bc=%s")
+        if ctx.attr.test_runner:
+            args.add("--test-runner", ctx.file.test_runner)
         arguments = ["test", "-fno-emit-bin", zig_config_args, args]
         mnemonic = "ZigBuildTestLib"
         progress_message = "Building %{input} as Zig test library %{output}"
@@ -400,8 +412,10 @@ def zig_build_impl(ctx, *, kind):
         bcinput = output
         output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
         libargs = ctx.actions.args()
+
         libargs.add(output, format = "-femit-bin=%s")
         libargs.add(bcinput)
+
         ctx.actions.run(
             outputs = [output],
             inputs = [bcinput],
