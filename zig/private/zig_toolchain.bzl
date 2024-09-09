@@ -1,6 +1,7 @@
 """Implementation of the zig_toolchain rule."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("//zig/private/providers:zig_module_info.bzl", "ZigModuleInfo")
 load("//zig/private/providers:zig_toolchain_info.bzl", "ZigToolchainInfo")
 
 DOC = """\
@@ -46,6 +47,11 @@ ATTRS = {
         mandatory = True,
         allow_files = True,
     ),
+    "zig_docs": attr.label(
+        doc = "Files of the Zig docs WASM sources.",
+        mandatory = True,
+        providers = [ZigModuleInfo],
+    ),
     "zig_h": attr.label(
         doc = "zig.h header file",
         mandatory = True,
@@ -82,6 +88,7 @@ def _zig_toolchain_impl(ctx):
         zig_exe = ctx.executable.zig_exe,
         zig_lib_path = ctx.file.zig_lib.path,
         zig_files = zig_files,
+        zig_docs = ctx.attr.zig_docs[ZigModuleInfo],
         zig_hdrs_ccinfo = CcInfo(
             compilation_context = cc_common.create_compilation_context(
                 headers = depset([ctx.file.zig_h]),

@@ -29,7 +29,7 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
 
     inputs = depset(direct = [hdr], transitive = [compilation_context.headers])
     ctx.actions.run_shell(
-        command = "e ${{@}} > {}".format(zig_out.path),
+        command = "${{@}} > {}".format(zig_out.path),
         inputs = inputs,
         outputs = [zig_out],
         arguments = [zigtoolchaininfo.zig_exe.path, "translate-c", zig_config_args, args],

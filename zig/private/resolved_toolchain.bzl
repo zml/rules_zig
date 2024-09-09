@@ -15,12 +15,25 @@ def _resolved_toolchain_impl(ctx):
         toolchain_info.default,
         toolchain_info.zigtoolchaininfo,
         toolchain_info.template_variables,
-    ]
+   ]
 
 # Copied from java_toolchain_alias
 # https://cs.opensource.google/bazel/bazel/+/master:tools/jdk/java_toolchain_alias.bzl
 resolved_toolchain = rule(
     implementation = _resolved_toolchain_impl,
+    toolchains = ["//zig:toolchain_type"],
+    incompatible_use_toolchain_transition = True,
+    doc = DOC,
+)
+
+def _resolved_docs_impl(ctx):
+    toolchain_info = ctx.toolchains["//zig:toolchain_type"]
+    return [
+        toolchain_info.zigtoolchaininfo.zig_docs,
+    ]
+
+resolved_docs = rule(
+    implementation = _resolved_docs_impl,
     toolchains = ["//zig:toolchain_type"],
     incompatible_use_toolchain_transition = True,
     doc = DOC,

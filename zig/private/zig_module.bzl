@@ -129,5 +129,5 @@ zig_module = rule(
     _zig_module_impl,
     attrs = ATTRS,
     doc = DOC,
-    toolchains = ["//zig:toolchain_type"],
+    # toolchains = ["//zig:toolchain_type"],
 )
