@@ -272,6 +272,16 @@ def zig_build_impl(ctx, *, kind):
             cdeps = cdeps,
         )
 
+    zig_settings(
+        settings = ctx.attr._settings[ZigSettingsInfo],
+        args = zig_config_args,
+    )
+
+    zig_target_platform(
+        target = zigtargetinfo,
+        args = zig_config_args,
+    )
+
     cc_infos = root_module.transitive_cdeps.to_list()
 
     c_module = zig_translate_c(
@@ -288,15 +298,6 @@ def zig_build_impl(ctx, *, kind):
         args = args,
     )
 
-    zig_settings(
-        settings = ctx.attr._settings[ZigSettingsInfo],
-        args = zig_config_args,
-    )
-
-    zig_target_platform(
-        target = zigtargetinfo,
-        args = zig_config_args,
-    )
 
     inputs = depset(
         direct = [],
