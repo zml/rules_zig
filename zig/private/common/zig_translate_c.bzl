@@ -1,4 +1,5 @@
 load("//zig/private/providers:zig_module_info.bzl", "zig_module_info")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 
 def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
     cc_info = cc_common.merge_cc_infos(direct_cc_infos = cc_infos)
@@ -17,8 +18,8 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
     args.add(hdr)
     args.add("-lc")
     args.add_all(compilation_context.defines, format_each = "-D%s")
-    args.add_all(compilation_context.includes, format_each = "-I%s")
     args.add("-I.")
+    args.add_all(compilation_context.includes, format_each = "-I%s")
 
     args.add_all(compilation_context.quote_includes, format_each = "-I%s")
     args.add_all(compilation_context.system_includes, before_each = "-isystem")
@@ -26,6 +27,11 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
         # Added in Bazel 7, see https://github.com/bazelbuild/bazel/commit/a6ef0b341a8ffe8ab27e5ace79d8eaae158c422b
         args.add_all(compilation_context.external_includes, before_each = "-isystem")
     args.add_all(compilation_context.framework_includes, format_each = "-F%s")
+
+    # If there is a CC toolchain, add its path there
+    cc_toolchain = find_cc_toolchain(ctx)
+    if (cc_toolchain):
+        args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
 
     inputs = depset(direct = [hdr], transitive = [compilation_context.headers])
     ctx.actions.run_shell(

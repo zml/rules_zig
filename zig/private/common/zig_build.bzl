@@ -1,5 +1,6 @@
 """Common implementation of the zig_binary|library|test rules."""
 
+load("@rules_cc//cc:find_cc_toolchain.bzl", "use_cc_toolchain")
 load(
     "//zig/private/common:bazel_builtin.bzl",
     "bazel_builtin_module",
@@ -131,7 +132,7 @@ Environment variables to inherit from external environment when executed by `baz
 TOOLCHAINS = [
     "//zig:toolchain_type",
     "//zig/target:toolchain_type",
-]
+] + use_cc_toolchain()
 
 def _lib_prefix(os):
     return os == "windows" and "" or "lib"
