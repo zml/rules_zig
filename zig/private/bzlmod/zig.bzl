@@ -218,6 +218,7 @@ def _toolchain_extension(module_ctx):
         exec_lengths = toolchain_exec_lengths,
         exec_constraints = toolchain_exec_constraints,
     )
+    return module_ctx.extension_metadata(reproducible = True)
 
 zig = module_extension(
     implementation = _toolchain_extension,
