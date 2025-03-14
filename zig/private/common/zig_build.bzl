@@ -378,6 +378,7 @@ def zig_build_impl(ctx, *, kind):
     elif kind == BINARY_KIND.test_lib:
         outputs.append(output)
         args.add(output, format = "-femit-llvm-bc=%s")
+        args.add("-fcompiler-rt")
         if ctx.attr.test_runner:
             args.add("--test-runner", ctx.file.test_runner)
         arguments = ["test", "-fno-emit-bin", zig_config_args, args]
@@ -417,6 +418,7 @@ def zig_build_impl(ctx, *, kind):
         libargs = ctx.actions.args()
 
         libargs.add(output, format = "-femit-bin=%s")
+        libargs.add("-fcompiler-rt")
         libargs.add(bcinput)
 
         ctx.actions.run(
