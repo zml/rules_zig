@@ -59,7 +59,9 @@ def _zls_completion_impl(ctx):
                 deps_build_roots = [],
                 packages = packages,
                 include_dirs = [],
+                top_level_steps = [],
                 available_options = {},
+                c_macros = [],
             )
         ),
     ))
