@@ -52,4 +52,5 @@ zig_binary = rule(
     doc = DOC,
     executable = True,
     toolchains = TOOLCHAINS,
+    fragments = ["cpp"],
 )
