@@ -115,7 +115,7 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
         if cc_toolchain.sysroot:
             sysroot = cc_toolchain.sysroot
 
-        if sysroot:
+        if sysroot and sysroot != "/dev/null":
             libc_txt = ctx.actions.declare_file("libc.txt")
             ctx.actions.write(
                 libc_txt,
