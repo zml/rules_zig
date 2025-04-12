@@ -119,9 +119,11 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
             libc_txt = ctx.actions.declare_file("libc.txt")
             ctx.actions.write(
                 libc_txt,
+                # translate-c doesn't need crt_dir
+                # which is a blessing because we have no way to get it from the cc_toolchain
                 """include_dir={include_dir}
 sys_include_dir={sys_include_dir}
-crt_dir=
+crt_dir=/dev/null
 msvc_lib_dir=
 kernel32_lib_dir=
 gcc_dir=
