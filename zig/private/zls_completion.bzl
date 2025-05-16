@@ -83,5 +83,6 @@ zls_completion = rule(
         ),
     },
     toolchains = TOOLCHAINS,
+    fragments = ["cpp"],
     executable =  True,
 )
