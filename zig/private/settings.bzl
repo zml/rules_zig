@@ -27,6 +27,10 @@ ATTRS = {
         doc = "The strip setting.",
         mandatory = True,
     ),
+    "copts": attr.label(
+        doc = "Command line compiler options.",
+        mandatory = True,
+    ),
 }
 
 MODE_VALUES = ["auto", "debug", "release_safe", "release_small", "release_fast"]
@@ -58,6 +62,9 @@ def _settings_impl(ctx):
     else:
         args.append("-fno-single-threaded")
 
+    copts = ctx.attr.copts[BuildSettingInfo].value
+    args.extend(copts)
+
     settings_info = ZigSettingsInfo(
         mode = mode,
         single_threaded = single_threaded,
@@ -81,4 +88,16 @@ settings = rule(
     _settings_impl,
     attrs = ATTRS,
     doc = DOC,
+)
+
+string_list_repeatable_flag = rule(
+    implementation = lambda ctx: BuildSettingInfo(value = ctx.build_setting_value),
+    build_setting = config.string_list(flag = True, repeatable = True),
+    attrs = {
+        "scope": attr.string(
+            doc = "The scope indicates where a flag can propagate to",
+            default = "universal",
+        ),
+    },
+    doc = "A string list-typed build setting that can be set on the command line",
 )

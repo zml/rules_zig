@@ -3,6 +3,7 @@ load(
     "//zig/private:settings.bzl",
     "MODE_VALUES",
     "settings",
+    "string_list_repeatable_flag",
 )
 
 settings(
@@ -14,6 +15,7 @@ settings(
         "//zig/config/mode:is_strip_sometimes_fastbuild": True,
         "//conditions:default": False,
     }),
+    copts = ":copt",
     visibility = ["//visibility:public"],
 )
 
@@ -28,6 +30,12 @@ bool_flag(
     name = "single_threaded",
     build_setting_default = False,
     visibility = ["//zig/config/threaded:__pkg__"],
+)
+
+string_list_repeatable_flag(
+    name = "copt",
+    build_setting_default = [],
+    visibility = ["//zig/config/mode:__pkg__"],
 )
 
 # Execute `bazel run //util:update_filegroups` to update this target.
