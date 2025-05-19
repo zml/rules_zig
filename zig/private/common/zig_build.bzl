@@ -306,7 +306,9 @@ def zig_build_impl(ctx, *, kind):
         order = "preorder",
     )
 
-    providers = []
+    providers = [
+        root_module,
+    ]
 
     if kind == BINARY_KIND.exe:
         outputs.append(output)
