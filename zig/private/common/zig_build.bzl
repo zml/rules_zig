@@ -93,6 +93,7 @@ BINARY_KIND = struct(
     obj = "obj",
     test = "test",
     test_lib = "test_lib",
+    bc = "bc",
     asm = "asm",
 )
 
@@ -219,7 +220,7 @@ def zig_build_impl(ctx, *, kind):
         output = ctx.actions.declare_file(ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
     elif kind == BINARY_KIND.shared_lib:
         output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _shared_lib_extension(zigtargetinfo.triple.os))
-    elif kind == BINARY_KIND.test_lib:
+    elif kind == BINARY_KIND.test_lib or kind == BINARY_KIND.bc:
         output = ctx.actions.declare_file(ctx.label.name + ".bc")
     elif kind == BINARY_KIND.asm:
         output = ctx.actions.declare_file(ctx.label.name + ".s")
@@ -379,12 +380,20 @@ def zig_build_impl(ctx, *, kind):
         progress_message = "Building %{input} as Zig shared library %{output}"
     elif kind == BINARY_KIND.test_lib:
         outputs.append(output)
+        args.add("-fno-emit-bin")
         args.add(output, format = "-femit-llvm-bc=%s")
         if ctx.attr.test_runner:
             args.add("--test-runner", ctx.file.test_runner)
-        arguments = ["test", "-fno-emit-bin", zig_config_args, args]
+        arguments = ["test", zig_config_args, args]
         mnemonic = "ZigBuildTestLib"
         progress_message = "Building %{input} as Zig test library %{output}"
+    elif kind == BINARY_KIND.bc:
+        outputs.append(output)
+        args.add("-fno-emit-bin")
+        args.add(output, format = "-femit-llvm-bc=%s")
+        arguments = ["build-obj", zig_config_args, args]
+        mnemonic = "ZigBuildBC"
+        progress_message = "Building %{input} as Zig LLVM Bytecode %{output}"
     elif kind == BINARY_KIND.asm:
         outputs.append(output)
         args.add("-fno-emit-bin")
@@ -394,12 +403,6 @@ def zig_build_impl(ctx, *, kind):
         progress_message = "Building %{input} as Zig library %{output}"
     else:
         fail("Unknown rule kind '{}'.".format(kind))
-
-    # Currently Zig don't output reference trace if color aren't enabled,
-    # and Bazel running `zig` outside of a terminal disable colors by default.
-    # Waiting on PR to enable reference trace without colors.
-    # https://github.com/ziglang/zig/pull/20338
-    arguments.extend(["--color", "on", "-freference-trace=10"])
 
     ctx.actions.run(
         outputs = outputs,
@@ -413,7 +416,7 @@ def zig_build_impl(ctx, *, kind):
         toolchain = "//zig:toolchain_type",
     )
 
-    if kind == BINARY_KIND.test_lib:
+    if kind == BINARY_KIND.test_lib or kind == BINARY_KIND.bc:
         bcinput = output
         output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
         libargs = ctx.actions.args()
