@@ -14,25 +14,25 @@ const std = @import("std");
 
 pub const Runfiles = @import("src/Runfiles.zig");
 
-/// Ensure argv and env are available to the standard library when built as a
-/// library.
-const init_array_section = switch (builtin.object_format) {
-    .macho => "__DATA,__init_array",
-    .elf => ".init_array",
-    else => "",
-};
-
-const fix_argv linksection(init_array_section) = &struct {
-    pub fn call(argc: c_int, argv: [*c][*:0]u8, envp: [*:null]?[*:0]u8) callconv(.C) void {
-        std.os.argv = argv[0..@intCast(argc)];
-        std.os.environ = @ptrCast(envp[0..std.mem.len(envp)]);
-    }
-}.call;
-
 comptime {
     if (builtin.output_mode != .Exe) {
         switch (builtin.object_format) {
-            .elf, .macho => _ = fix_argv,
+            .elf, .macho => |objfmt| _ = struct {
+                const init_array_section = switch (objfmt) {
+                    .macho => "__DATA,__init_array",
+                    .elf => ".init_array",
+                    else => "",
+                };
+
+                /// Ensure argv and env are available to the standard library when built as a
+                /// library.
+                export const fix_argv linksection(init_array_section) = &struct {
+                    pub fn call(argc: c_int, argv: [*c][*:0]u8, envp: [*:null]?[*:0]u8) callconv(.c) void {
+                        std.os.argv = argv[0..@intCast(argc)];
+                        std.os.environ = @ptrCast(std.mem.span(envp));
+                    }
+                }.call;
+            },
             else => {},
         }
     }
