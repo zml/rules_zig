@@ -123,7 +123,10 @@ def _zig_module_impl(ctx):
         cdeps = cdeps,
     )
 
-    return [default, module]
+    srcs = OutputGroupInfo(
+        srcs = [module.main] + list(module.srcs) + list(module.extra_srcs),
+    )
+    return [default, module, srcs]
 
 zig_module = rule(
     _zig_module_impl,

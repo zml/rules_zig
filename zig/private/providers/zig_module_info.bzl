@@ -50,7 +50,8 @@ def _render_dep(dep):
     return dep.name + "=" + dep.canonical_name
 
 def add_module_files(inputs, module):
-    inputs.append(depset(direct = tuple((module.main,)) + module.srcs + module.extra_srcs))
+    deps = (module.main,) + module.srcs + module.extra_srcs
+    inputs.append(depset(direct = deps))
 
 def zig_module_render_args(*, module, inputs, c_module, args):
     args.add_all(module.deps, before_each = "--dep", map_each = _render_dep)
