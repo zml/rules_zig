@@ -286,12 +286,15 @@ def zig_build_impl(ctx, *, kind):
 
     cc_infos = root_module.transitive_cdeps.to_list()
 
-    c_module = zig_translate_c(
-        ctx = ctx,
-        zigtoolchaininfo = zigtoolchaininfo,
-        zig_config_args = zig_config_args,
-        cc_infos = cc_infos,
-    )
+    if len(cc_infos) == 0:
+        c_module = None
+    else:
+        c_module = zig_translate_c(
+            ctx = ctx,
+            zigtoolchaininfo = zigtoolchaininfo,
+            zig_config_args = zig_config_args,
+            cc_infos = cc_infos,
+        )
 
     zig_module_specifications(
         root_module = root_module,
