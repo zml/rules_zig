@@ -448,8 +448,18 @@ def zig_build_impl(ctx, *, kind):
         providers.append(cc_info)
 
     files = depset([output])
+
+    dummy = None
+    if kind != BINARY_KIND.exe:
+        dummy = ctx.actions.declare_file(ctx.label.name + ".exe.dummy")
+        ctx.actions.write(
+            output = dummy,
+            content = "",
+            is_executable = True,
+        )
+
     default = DefaultInfo(
-        executable = output,
+        executable = output if kind == BINARY_KIND.exe else dummy,
         files = files,
         runfiles = zig_create_runfiles(
             ctx_runfiles = ctx.runfiles,
