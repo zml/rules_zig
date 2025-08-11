@@ -1,6 +1,17 @@
-load("//zig/private/providers:zig_module_info.bzl", "zig_module_info")
-load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 load("@rules_cc//cc:action_names.bzl", "C_COMPILE_ACTION_NAME")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
+load("//zig/private/providers:zig_module_info.bzl", "zig_module_info")
+
+# translate-c doesn't need crt_dir
+# which is a blessing because we have no way to get it from the cc_toolchain
+_LIBC_TEMPLATE = """\
+include_dir={include_dir}
+sys_include_dir={sys_include_dir}
+crt_dir=/dev/null
+msvc_lib_dir=
+kernel32_lib_dir=
+gcc_dir=
+"""
 
 # { option: takes_value }
 # translate-c only supports a limited set of clang options.
@@ -32,6 +43,7 @@ def _filter_options(command_line, allow_list):
             continue
 
         arg = command_line[i]
+
         # Check for exact match, possibly with '='
         option_name = arg.split("=", 1)[0]
         if option_name in allow_list:
@@ -58,14 +70,14 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
     cc_info = cc_common.merge_cc_infos(direct_cc_infos = cc_infos)
     compilation_context = cc_info.compilation_context
 
-    header_txt = "\n".join([
+    inputs = []
+
+    hdr = ctx.actions.declare_file("{}_c.h".format(ctx.label.name))
+    ctx.actions.write(hdr, "\n".join([
         '#include "{}"'.format(hdr.path)
         for hdr in compilation_context.direct_public_headers
-    ])
-    hdr = ctx.actions.declare_file("{}_c.h".format(ctx.label.name))
-    ctx.actions.write(hdr, header_txt)
-
-    zig_out = ctx.actions.declare_file("{}_c.zig".format(ctx.label.name))
+    ]))
+    inputs.append(hdr)
 
     args = ctx.actions.args()
     args.add(hdr)
@@ -76,16 +88,13 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
 
     args.add_all(compilation_context.quote_includes, format_each = "-I%s")
     args.add_all(compilation_context.system_includes, before_each = "-isystem")
-    if hasattr(compilation_context, "external_includes"):
-        # Added in Bazel 7, see https://github.com/bazelbuild/bazel/commit/a6ef0b341a8ffe8ab27e5ace79d8eaae158c422b
-        args.add_all(compilation_context.external_includes, before_each = "-isystem")
     args.add_all(compilation_context.framework_includes, format_each = "-F%s")
+
+    # Added in Bazel 7, see https://github.com/bazelbuild/bazel/commit/a6ef0b341a8ffe8ab27e5ace79d8eaae158c422b
+    args.add_all(getattr(compilation_context, "external_includes", []), before_each = "-isystem")
 
     # If there is a CC toolchain, add its path there
     cc_toolchain = find_cc_toolchain(ctx)
-
-    additional_args = []
-    additional_inputs = []
     if cc_toolchain:
         args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
 
@@ -117,31 +126,23 @@ def zig_translate_c(*, ctx, zigtoolchaininfo, zig_config_args, cc_infos):
 
         if sysroot and sysroot != "/dev/null":
             libc_txt = ctx.actions.declare_file("libc.txt")
-            ctx.actions.write(
-                libc_txt,
-                # translate-c doesn't need crt_dir
-                # which is a blessing because we have no way to get it from the cc_toolchain
-                """include_dir={include_dir}
-sys_include_dir={sys_include_dir}
-crt_dir=/dev/null
-msvc_lib_dir=
-kernel32_lib_dir=
-gcc_dir=
-""".format(
+            ctx.actions.write(libc_txt, _LIBC_TEMPLATE.format(
                 include_dir = "{}/usr/include".format(sysroot),
                 sys_include_dir = "{}/usr/include".format(sysroot),
-                ),
-            )
-            additional_args.append("--libc")
-            additional_args.append(libc_txt.path)
-            additional_inputs.append(libc_txt)
+            ))
+            args.add("--libc", libc_txt)
+            inputs.append(libc_txt)
 
-    args.add_all(additional_args)
-
-    inputs = depset(direct = [hdr] + additional_inputs, transitive = [compilation_context.headers, cc_toolchain.all_files])
+    zig_out = ctx.actions.declare_file("{}_c.zig".format(ctx.label.name))
     ctx.actions.run_shell(
         command = "${{@}} > {}".format(zig_out.path),
-        inputs = inputs,
+        inputs = depset(
+            direct = inputs,
+            transitive = [
+                compilation_context.headers,
+                cc_toolchain.all_files,
+            ],
+        ),
         outputs = [zig_out],
         arguments = [zigtoolchaininfo.zig_exe.path, "translate-c", zig_config_args, args],
         mnemonic = "ZigTranslateC",
@@ -155,4 +156,5 @@ gcc_dir=
         name = "c",
         canonical_name = "{}/c".format(str(ctx.label)),
         main = zig_out,
+        copts = ["-lc"],
     )

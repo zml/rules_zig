@@ -62,7 +62,7 @@ def _zls_completion_impl(ctx):
                 top_level_steps = [],
                 available_options = {},
                 c_macros = [],
-            )
+            ),
         ),
     ))
 
@@ -71,7 +71,7 @@ def _zls_completion_impl(ctx):
             files = depset(direct = [runner], transitive = srcs),
             executable = runner,
             runfiles = ctx.runfiles(transitive_files = depset(transitive = srcs)),
-        )
+        ),
     ]
 
 zls_completion = rule(
@@ -84,5 +84,5 @@ zls_completion = rule(
     },
     toolchains = TOOLCHAINS,
     fragments = ["cpp"],
-    executable =  True,
+    executable = True,
 )

@@ -19,6 +19,10 @@ ATTRS = {
         doc = "The release mode setting.",
         mandatory = True,
     ),
+    "linkmode": attr.label(
+        doc = "The link mode setting.",
+        mandatory = True,
+    ),
     "single_threaded": attr.label(
         doc = "The Zig single-threaded setting.",
         mandatory = True,
@@ -35,6 +39,8 @@ ATTRS = {
 
 MODE_VALUES = ["auto", "debug", "release_safe", "release_small", "release_fast"]
 
+LINKMODE_VALUES = ["zig", "cc"]
+
 def _settings_impl(ctx):
     args = [
         "--build-id=sha1",
@@ -43,7 +49,7 @@ def _settings_impl(ctx):
     mode = ctx.attr.mode[BuildSettingInfo].value
     if (mode == "auto"):
         mode = ctx.var["COMPILATION_MODE"] == "opt" and "release_safe" or "debug"
-    args.extend(["-O",{
+    args.extend(["-O", {
         "debug": "Debug",
         "release_safe": "ReleaseSafe",
         "release_small": "ReleaseSmall",
@@ -53,22 +59,21 @@ def _settings_impl(ctx):
     strip = ctx.attr.strip
     if (strip):
         args.append("-fstrip")
-    else:
-        args.append("-fno-strip")
 
     single_threaded = ctx.attr.single_threaded[BuildSettingInfo].value
     if (single_threaded):
         args.append("-fsingle-threaded")
-    else:
-        args.append("-fno-single-threaded")
 
     copts = ctx.attr.copts[BuildSettingInfo].value
     args.extend(copts)
+
+    linkmode = ctx.attr.linkmode[BuildSettingInfo].value
 
     settings_info = ZigSettingsInfo(
         mode = mode,
         single_threaded = single_threaded,
         strip = strip,
+        linkmode = linkmode,
         args = args,
     )
 

@@ -1,9 +1,9 @@
-"""Implementation of the zig_binary rule."""
+"""Implementation of the zig_shared_library rule."""
 
 load(
     "//zig/private/common:zig_build.bzl",
-    "BINARY_ATTRS",
     "DOCS_ATTRS",
+    "SHARED_LIBRARY_ATTRS",
     "build_kind",
     "zig_build_impl",
     COMMON_ATTRS = "ATTRS",
@@ -22,9 +22,9 @@ using the command `bazel build //my:target --output_groups=zig_docs`.
 **EXAMPLE**
 
 ```bzl
-load("@rules_zig//zig:defs.bzl", "zig_binary")
+load("@rules_zig//zig:defs.bzl", "zig_shared_library")
 
-zig_binary(
+zig_shared_library(
     name = "my-binary",
     main = "main.zig",
     srcs = [
@@ -37,15 +37,14 @@ zig_binary(
 ```
 """
 
-ATTRS = COMMON_ATTRS | BINARY_ATTRS | DOCS_ATTRS
+ATTRS = COMMON_ATTRS | SHARED_LIBRARY_ATTRS | DOCS_ATTRS
 
 TOOLCHAINS = COMMON_TOOLCHAINS
 
-zig_binary = rule(
-    implementation = lambda ctx: zig_build_impl(ctx, kind = build_kind.exe),
+zig_shared_library = rule(
+    implementation = lambda ctx: zig_build_impl(ctx, kind = build_kind.shared_lib),
     attrs = ATTRS,
     doc = DOC,
-    executable = True,
     toolchains = TOOLCHAINS,
     fragments = ["cpp"],
 )

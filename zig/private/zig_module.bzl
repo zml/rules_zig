@@ -1,5 +1,6 @@
 """Implementation of the zig_module rule."""
 
+load("@bazel_skylib//lib:types.bzl", "types")
 load(
     "//zig/private/common:bazel_builtin.bzl",
     "bazel_builtin_module",
@@ -117,7 +118,7 @@ def _zig_module_impl(ctx):
         main = ctx.file.main,
         srcs = ctx.files.srcs,
         extra_srcs = ctx.files.extra_srcs,
-        copts =  ctx.attr.copts,
+        copts = ctx.attr.copts,
         linkopts = ctx.attr.linkopts,
         deps = zdeps,
         cdeps = cdeps,

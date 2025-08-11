@@ -2,10 +2,10 @@
 
 load(
     "//zig/private/common:zig_build.bzl",
-    "TEST_ATTRS",
     "DOCS_ATTRS",
+    "TEST_ATTRS",
+    "build_kind",
     "zig_build_impl",
-    "BINARY_KIND",
     COMMON_ATTRS = "ATTRS",
     COMMON_TOOLCHAINS = "TOOLCHAINS",
 )
@@ -40,13 +40,11 @@ ATTRS = COMMON_ATTRS | TEST_ATTRS | DOCS_ATTRS
 
 TOOLCHAINS = COMMON_TOOLCHAINS
 
-def _zig_test_impl(ctx):
-    return zig_build_impl(ctx, kind = BINARY_KIND.test)
-
 zig_test = rule(
-    _zig_test_impl,
+    implementation = lambda ctx: zig_build_impl(ctx, kind = build_kind.test),
     attrs = ATTRS,
     doc = DOC,
     test = True,
     toolchains = TOOLCHAINS,
+    fragments = ["cpp"],
 )
