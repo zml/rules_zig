@@ -8,6 +8,7 @@ FIELDS = {
     "mode": "The Zig build mode setting.",
     "single_threaded": "The Zig single-threaded setting.",
     "strip": "The strip setting.",
+    "linkmode": "The Zig link mode setting.",
     "args": "The collected compiler arguments for all active settings.",
 }
 

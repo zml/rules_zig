@@ -27,6 +27,7 @@ zig_dev.toolchain(zig_version = "0.12.0")
 zig_dev.toolchain(zig_version = "0.11.0")
 
 bazel_dep(name = "rules_cc", version = "0.0.9")
+
 bazel_dep(name = "stardoc", version = "0.7.0", dev_dependency = True, repo_name = "io_bazel_stardoc")
 bazel_dep(name = "gazelle", version = "0.38.0", dev_dependency = True, repo_name = "bazel_gazelle")
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.7.1", dev_dependency = True)
@@ -66,3 +67,9 @@ use_repo(
 # rules_bazel_integration_test/tools/update_deleted_packages.sh when invoked
 # through the rules_multirun target //util:update.
 bazel_dep(name = "cgrindel_bazel_starlib", version = "0.21.0", dev_dependency = True)
+
+# Hack to get around a cc_common.link limitation.
+# See https://github.com/bazelbuild/bazel/pull/23838
+cc_common_link = use_repo_rule("//zig:extensions.bzl", "cc_common_link")
+
+cc_common_link(name = "build_bazel_rules_android")

@@ -1,6 +1,7 @@
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load(
     "//zig/private:settings.bzl",
+    "LINKMODE_VALUES",
     "MODE_VALUES",
     "settings",
     "string_list_repeatable_flag",
@@ -8,6 +9,8 @@ load(
 
 settings(
     name = "settings",
+    copts = ":copt",
+    linkmode = ":linkmode",
     mode = ":mode",
     single_threaded = ":single_threaded",
     strip = select({
@@ -15,13 +18,19 @@ settings(
         "//zig/config/mode:is_strip_sometimes_fastbuild": True,
         "//conditions:default": False,
     }),
-    copts = ":copt",
     visibility = ["//visibility:public"],
 )
 
 string_flag(
+    name = "linkmode",
+    build_setting_default = LINKMODE_VALUES[0],
+    values = LINKMODE_VALUES,
+    visibility = ["//zig/config/mode:__pkg__"],
+)
+
+string_flag(
     name = "mode",
-    build_setting_default = "auto",
+    build_setting_default = MODE_VALUES[0],
     values = MODE_VALUES,
     visibility = ["//zig/config/mode:__pkg__"],
 )

@@ -2,7 +2,7 @@
 
 load(
     "//zig/private/common:zig_build.bzl",
-    "BINARY_ATTRS",
+    "ASM_ATTRS",
     "DOCS_ATTRS",
     "build_kind",
     "zig_build_impl",
@@ -37,15 +37,14 @@ zig_binary(
 ```
 """
 
-ATTRS = COMMON_ATTRS | BINARY_ATTRS | DOCS_ATTRS
+ATTRS = COMMON_ATTRS | ASM_ATTRS | DOCS_ATTRS
 
 TOOLCHAINS = COMMON_TOOLCHAINS
 
-zig_binary = rule(
-    implementation = lambda ctx: zig_build_impl(ctx, kind = build_kind.exe),
+zig_asm_binary = rule(
+    implementation = lambda ctx: zig_build_impl(ctx, kind = build_kind.asm),
     attrs = ATTRS,
     doc = DOC,
-    executable = True,
     toolchains = TOOLCHAINS,
     fragments = ["cpp"],
 )
