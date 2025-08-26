@@ -11,4 +11,4 @@ comptime {
     });
 }
 
-fn internalName() callconv(.C) void {}
+fn internalName() callconv(.c) void {}

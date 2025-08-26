@@ -69,6 +69,13 @@ else
 ///
 /// The caller has to free the path contained in the returned location.
 pub fn discoverRunfiles(options: DiscoverOptions) DiscoverError!?Location {
+    return _discoverRunfiles(options) catch |err| switch (err) {
+        error.WriteFailed => error.OutOfMemory,
+        else => |e| e,
+    };
+}
+
+fn _discoverRunfiles(options: DiscoverOptions) !?Location {
     if (options.manifest) |value|
         return .{ .manifest = try options.allocator.dupe(u8, value) };
 
@@ -86,27 +93,27 @@ pub fn discoverRunfiles(options: DiscoverOptions) DiscoverError!?Location {
     const argv0 = options.argv0 orelse iter.next() orelse
         return error.MissingArg0;
 
-    var buffer = std.ArrayList(u8).init(options.allocator);
+    var buffer: std.Io.Writer.Allocating = .init(options.allocator);
     defer buffer.deinit();
 
     buffer.clearRetainingCapacity();
-    try buffer.writer().print("{s}{s}", .{ argv0, runfiles_manifest_suffix });
-    if (isReadableFile(buffer.items))
+    try buffer.writer.print("{s}{s}", .{ argv0, runfiles_manifest_suffix });
+    if (isReadableFile(buffer.written()))
         return .{ .manifest = try buffer.toOwnedSlice() };
 
     buffer.clearRetainingCapacity();
-    try buffer.writer().print("{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
-    if (isReadableFile(buffer.items))
+    try buffer.writer.print("{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
+    if (isReadableFile(buffer.written()))
         return .{ .manifest = try buffer.toOwnedSlice() };
 
     buffer.clearRetainingCapacity();
-    try buffer.writer().print("{s}{s}", .{ argv0, runfiles_directory_suffix });
-    if (isOpenableDir(buffer.items))
+    try buffer.writer.print("{s}{s}", .{ argv0, runfiles_directory_suffix });
+    if (isOpenableDir(buffer.written()))
         return .{ .directory = try buffer.toOwnedSlice() };
 
     buffer.clearRetainingCapacity();
-    try buffer.writer().print("{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
-    if (isOpenableDir(buffer.items))
+    try buffer.writer.print("{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
+    if (isOpenableDir(buffer.written()))
         return .{ .directory = try buffer.toOwnedSlice() };
 
     return null;
