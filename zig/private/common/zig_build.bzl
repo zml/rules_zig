@@ -504,10 +504,9 @@ def zig_build_impl(ctx, *, kind):
                 direct_cc_infos = [
                     _cc_info_for_library(
                         ctx = ctx,
-                        cc_infos = cc_infos,
                         static_library = static_lib,
                         alwayslink = True,
-                    ),
+                    )
                 ],
                 cc_infos = cc_infos,
             ),
