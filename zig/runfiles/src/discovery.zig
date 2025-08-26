@@ -43,20 +43,11 @@ pub const DiscoverOptions = struct {
     argv0: ?[]const u8 = null,
 };
 
-pub const DiscoverError = if (builtin.zig_version.major == 0 and builtin.zig_version.minor == 11)
-    error{
-        OutOfMemory,
-        InvalidCmdLine,
-        InvalidUtf8,
-        MissingArg0,
-    }
-else
-    error{
-        OutOfMemory,
-        InvalidCmdLine,
-        InvalidWtf8,
-        MissingArg0,
-    };
+pub const DiscoverError = error{
+    InvalidCmdLine,
+    InvalidWtf8,
+    MissingArg0,
+} || std.mem.Allocator.Error || std.fmt.BufPrintError;
 
 /// The unified runfiles discovery strategy is to:
 /// * check if `RUNFILES_MANIFEST_FILE` or `RUNFILES_DIR` envvars are set, and
@@ -69,13 +60,6 @@ else
 ///
 /// The caller has to free the path contained in the returned location.
 pub fn discoverRunfiles(options: DiscoverOptions) DiscoverError!?Location {
-    return _discoverRunfiles(options) catch |err| switch (err) {
-        error.WriteFailed => error.OutOfMemory,
-        else => |e| e,
-    };
-}
-
-fn _discoverRunfiles(options: DiscoverOptions) !?Location {
     if (options.manifest) |value|
         return .{ .manifest = try options.allocator.dupe(u8, value) };
 
@@ -93,28 +77,15 @@ fn _discoverRunfiles(options: DiscoverOptions) !?Location {
     const argv0 = options.argv0 orelse iter.next() orelse
         return error.MissingArg0;
 
-    var buffer: std.Io.Writer.Allocating = .init(options.allocator);
-    defer buffer.deinit();
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
 
-    buffer.clearRetainingCapacity();
-    try buffer.writer.print("{s}{s}", .{ argv0, runfiles_manifest_suffix });
-    if (isReadableFile(buffer.written()))
-        return .{ .manifest = try buffer.toOwnedSlice() };
+    var path = try std.fmt.bufPrint(&buffer, "{s}" ++ runfiles_manifest_suffix, .{argv0});
+    if (isReadableFile(path))
+        return .{ .manifest = try options.allocator.dupe(u8, path) };
 
-    buffer.clearRetainingCapacity();
-    try buffer.writer.print("{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
-    if (isReadableFile(buffer.written()))
-        return .{ .manifest = try buffer.toOwnedSlice() };
-
-    buffer.clearRetainingCapacity();
-    try buffer.writer.print("{s}{s}", .{ argv0, runfiles_directory_suffix });
-    if (isOpenableDir(buffer.written()))
-        return .{ .directory = try buffer.toOwnedSlice() };
-
-    buffer.clearRetainingCapacity();
-    try buffer.writer.print("{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
-    if (isOpenableDir(buffer.written()))
-        return .{ .directory = try buffer.toOwnedSlice() };
+    path = try std.fmt.bufPrint(&buffer, "{s}" ++ runfiles_directory_suffix, .{argv0});
+    if (isOpenableDir(path))
+        return .{ .directory = try options.allocator.dupe(u8, path) };
 
     return null;
 }
@@ -127,14 +98,12 @@ fn getEnvVar(allocator: std.mem.Allocator, key: []const u8) !?[]const u8 {
 }
 
 fn isReadableFile(file_path: []const u8) bool {
-    var file = std.fs.cwd().openFile(file_path, .{}) catch return false;
-    file.close();
+    std.fs.cwd().access(file_path, .{}) catch return false;
     return true;
 }
 
 fn isOpenableDir(dir_path: []const u8) bool {
-    var dir = std.fs.cwd().openDir(dir_path, .{}) catch return false;
-    dir.close();
+    std.fs.cwd().access(dir_path, .{}) catch return false;
     return true;
 }
 
