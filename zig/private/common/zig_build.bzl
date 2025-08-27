@@ -350,6 +350,13 @@ def zig_build_impl(ctx, *, kind):
         toolchain = "//zig:toolchain_type",
     )
 
+    # There is a crash in the Zig x86-64 self hosted backend
+    # In case there are C dependencies, we use the LLVM backend as a workaround
+    if cc_infos:
+        major, minor, patch = [int(c) for c in zigtoolchaininfo.zig_version.split("-")[0].split(".")]
+        if major == 0 and minor == 15:  # make it more precise once it's fixed
+            zig_config_args.add("-fllvm")
+
     if kind == build_kind.exe:
         executable = None
         mnemonic = "ZigBuildExe"
@@ -506,7 +513,7 @@ def zig_build_impl(ctx, *, kind):
                         ctx = ctx,
                         static_library = static_lib,
                         alwayslink = True,
-                    )
+                    ),
                 ],
                 cc_infos = cc_infos,
             ),
