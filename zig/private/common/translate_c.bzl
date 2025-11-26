@@ -1,11 +1,15 @@
 """Handle translate-c pass."""
 
-load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
+load("@apple_support//lib:apple_support.bzl", "apple_support")
+load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-load("//zig/private/providers:zig_module_info.bzl", "zig_module_info")
 
-def zig_translate_c(*, ctx, name, zigtoolchaininfo, global_args, cc_infos, output_prefix = ""):
+# load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
+load("//zig/private:cc_helper.bzl", "find_cc_toolchain")
+load("//zig/private/providers:zig_module_info.bzl", "ZigModuleInfo", "zig_module_info")
+
+def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args, cc_infos, output_prefix = ""):
     """Handle translate-c build action.
 
     Sets the appropriate command-line flags for the Zig compiler to expose
@@ -29,16 +33,68 @@ def zig_translate_c(*, ctx, name, zigtoolchaininfo, global_args, cc_infos, outpu
     inputs = []
     transitive_inputs = [compilation_context.headers]
 
+    hdrs = compilation_context.direct_public_headers
+
+    # If there is a CC toolchain, add builtin directories.
+    # This allows including to extra headers provided directly by the toolchain.
+    # E.g. <os/log.h> on macOS.
+    cc_toolchain, cc_feature_configuration = find_cc_toolchain(ctx, mandatory = False)
+    if cc_toolchain:
+        toolchain_defines_hdr = ctx.actions.declare_file("{}.toolchain_defines_hdr.c".format(ctx.label.name))
+        ctx.actions.write(toolchain_defines_hdr, "")
+
+        _, cc_results = cc_common.compile(
+            actions = ctx.actions,
+            feature_configuration = cc_feature_configuration,
+            cc_toolchain = cc_toolchain,
+            srcs = [toolchain_defines_hdr],
+            name = ctx.label.name,
+            user_compile_flags = ["-E", "-dM", "-D__building_module(x)=0"],
+            disallow_pic_outputs = True,
+        )
+
+        hdrs = cc_results.objects + hdrs
+        transitive_inputs.append(depset(direct = cc_results.objects))
+
     hdr = ctx.actions.declare_file("{}{}_c.h".format(output_prefix, ctx.label.name))
     ctx.actions.write(hdr, "\n".join([
         '#include "{}"'.format(hdr.path)
-        for hdr in compilation_context.direct_public_headers
+        for hdr in hdrs
     ]))
     inputs.append(hdr)
 
     args = ctx.actions.args()
     args.add(hdr)
-    args.add("-lc")
+
+    if cc_toolchain:
+        c_compile_variables = cc_common.create_compile_variables(
+            feature_configuration = cc_feature_configuration,
+            cc_toolchain = cc_toolchain,
+            user_compile_flags = ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts,
+        )
+        command_line = cc_common.get_memory_inefficient_command_line(
+            feature_configuration = cc_feature_configuration,
+            action_name = ACTION_NAMES.c_compile,
+            variables = c_compile_variables,
+        )
+
+        print(cc_toolchain.built_in_include_directories)
+        transitive_inputs.append(cc_toolchain.all_files)
+        args.add_all([
+            d.replace("external/toolchains_llvm_bootstrapped+/toolchain/", "")
+            for d in cc_toolchain.built_in_include_directories
+        ], before_each = "-isystem")
+        args.add_all(command_line)
+
+    args.add_all([
+        "--emulate=clang",
+        "-undef",
+        "-nobuiltininc",
+        "-nostdlibinc",
+        "-fmodule-libs",
+        "-D__building_module(x)=0",
+    ])
+
     args.add_all(compilation_context.defines, format_each = "-D%s")
     args.add("-I.")
     args.add_all(compilation_context.includes, format_each = "-I%s")
@@ -52,28 +108,29 @@ def zig_translate_c(*, ctx, name, zigtoolchaininfo, global_args, cc_infos, outpu
     args.add_all(getattr(compilation_context, "external_includes", []), before_each = "-isystem")
     args.add_all(compilation_context.framework_includes, format_each = "-F%s")
 
-    # If there is a CC toolchain, add builtin directories.
-    # This allows including to extra headers provided directly by the toolchain.
-    # E.g. <os/log.h> on macOS.
-    cc_toolchain = find_cc_toolchain(ctx, mandatory = False)
-    if cc_toolchain:
-        transitive_inputs.append(cc_toolchain.all_files)
-        args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
-
     zig_out = ctx.actions.declare_file("{}{}_c.zig".format(output_prefix, ctx.label.name))
-    ctx.actions.run_shell(
-        command = "${{@}} > {}".format(zig_out.path),
+    args.add("-o", zig_out)
+    apple_support.run(
+        actions = ctx.actions,
+        executable = ctx.executable._translate_c,
         inputs = depset(
             direct = inputs,
             transitive = transitive_inputs,
         ),
         outputs = [zig_out],
-        arguments = [zigtoolchaininfo.zig_exe_path, "translate-c", global_args, args],
+        arguments = [args],
         mnemonic = "ZigTranslateC",
         progress_message = "zig translate-c %{label}",
         execution_requirements = {tag: "" for tag in ctx.attr.tags},
+        env = {
+            "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+            "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
+            "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+        },
         tools = zigtoolchaininfo.zig_files,
         toolchain = "//zig:toolchain_type",
+        apple_fragment = ctx.fragments.apple,
+        xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig],
     )
 
     # Only forward the linking context since compilation_context is now handled
@@ -84,7 +141,8 @@ def zig_translate_c(*, ctx, name, zigtoolchaininfo, global_args, cc_infos, outpu
 
     return zig_module_info(
         name = name,
-        canonical_name = "{}/{}".format(str(ctx.label), name),
+        canonical_name = canonical_name,
         main = zig_out,
         cdeps = [cc_info],
+        deps = [ctx.attr._c_helpers[ZigModuleInfo], ctx.attr._c_builtins[ZigModuleInfo]],
     )

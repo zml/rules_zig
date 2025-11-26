@@ -156,6 +156,17 @@ NOTE: The environment variables are not set when you run the target outside of B
         """,
         mandatory = False,
     ),
+    "_translate_c": attr.label(
+        default = "@@//translate-c",
+        cfg = "exec",
+        executable = True,
+    ),
+    "_c_helpers": attr.label(
+        default = "@@//translate-c:helpers",
+    ),
+    "_c_builtins": attr.label(
+        default = "@@//translate-c:c_builtins",
+    ),
 }
 
 TEST_ATTRS = {
@@ -384,6 +395,7 @@ buildozer 'move cdeps deps *' {target}
         c_module = zig_translate_c(
             ctx = ctx,
             name = "c",
+            canonical_name = "c",
             zigtoolchaininfo = zigtoolchaininfo,
             global_args = global_args,
             cc_infos = [root_module.cc_info],
