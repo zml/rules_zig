@@ -49,7 +49,8 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
             cc_toolchain = cc_toolchain,
             srcs = [toolchain_defines_hdr],
             name = ctx.label.name,
-            user_compile_flags = ["-E", "-dM", "-D__building_module(x)=0"],
+            # -fblocks is by default on darwin. but gcc doesn't handle it so best undef the macro manually.
+            user_compile_flags = ["-x", "c", "-E", "-dM", "-D__building_module(x)=0", "-U__BLOCKS__"],
             disallow_pic_outputs = True,
         )
 
@@ -122,6 +123,7 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
         mnemonic = "ZigTranslateC",
         progress_message = "zig translate-c %{label}",
         execution_requirements = {tag: "" for tag in ctx.attr.tags},
+        xcode_path_resolve_level = apple_support.xcode_path_resolve_level.args,
         env = {
             "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
             "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
