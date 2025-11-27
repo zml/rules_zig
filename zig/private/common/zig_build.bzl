@@ -157,15 +157,15 @@ NOTE: The environment variables are not set when you run the target outside of B
         mandatory = False,
     ),
     "_translate_c": attr.label(
-        default = "@@//translate-c",
+        default = Label(":translate-c"),
         cfg = "exec",
         executable = True,
     ),
     "_c_helpers": attr.label(
-        default = "@@//translate-c:helpers",
+        default = Label(":helpers"),
     ),
     "_c_builtins": attr.label(
-        default = "@@//translate-c:c_builtins",
+        default = Label(":c_builtins"),
     ),
 }
 

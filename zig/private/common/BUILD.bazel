@@ -2,6 +2,39 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
 exports_files(["bazel_builtin.zig.tpl"])
 
+genrule(
+    name = "dummy",
+    outs = ["dummy.sh"],
+    cmd = "echo '#!/bin/sh\necho Dummy' > $@",
+    visibility = ["//zig:__subpackages__"],
+    executable = True,
+)
+
+alias(
+    name = "translate-c",
+    actual = select({
+        "//zig/settings:translate_c_enabled": "@@//translate-c:translate-c",
+        "//conditions:default": ":dummy",
+    }),
+    visibility = ["//zig:__subpackages__"],
+)
+
+alias(
+    name = "helpers",
+    actual = select({
+        "//conditions:default": "@@//translate-c:helpers",
+    }),
+    visibility = ["//zig:__subpackages__"],
+)
+
+alias(
+    name = "c_builtins",
+    actual = select({
+        "//conditions:default": "@@//translate-c:c_builtins",
+    }),
+    visibility = ["//zig:__subpackages__"],
+)
+
 bzl_library(
     name = "zig_cache",
     srcs = ["zig_cache.bzl"],

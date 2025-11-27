@@ -115,6 +115,8 @@ def _zig_transition_impl(settings, attr):
         result["//zig/settings:threaded"] = attr.threaded
     if attr.zigopt:
         result["//zig/settings:zigopt"] = attr.zigopt
+    if attr.no_translate_c:
+        result["//zig/settings:no_translate_c"] = attr.no_translate_c
     return result
 
 _zig_transition = transition(
@@ -127,6 +129,7 @@ _zig_transition = transition(
         "//zig/settings:mode",
         "//zig/settings:threaded",
         "//zig/settings:zigopt",
+        "//zig/settings:no_translate_c",
     ],
     outputs = [
         "//command_line_option:extra_toolchains",
@@ -136,6 +139,7 @@ _zig_transition = transition(
         "//zig/settings:mode",
         "//zig/settings:threaded",
         "//zig/settings:zigopt",
+        "//zig/settings:no_translate_c",
     ],
 )
 
@@ -172,6 +176,10 @@ def _make_attrs(*, executable):
             doc = "The threaded setting, corresponds to the `-fsingle-threaded` Zig compiler flag.",
             mandatory = False,
             values = THREADED_VALUES,
+        ),
+        "no_translate_c": attr.bool(
+            doc = "If true, disables translation of C headers for C dependencies.",
+            mandatory = False,
         ),
         "zigopt": attr.string_list(
             doc = """
