@@ -111,29 +111,51 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
 
     zig_out = ctx.actions.declare_file("{}{}_c.zig".format(output_prefix, ctx.label.name))
     args.add("-o", zig_out)
-    apple_support.run(
-        actions = ctx.actions,
-        executable = ctx.executable._translate_c,
-        inputs = depset(
-            direct = inputs,
-            transitive = transitive_inputs,
-        ),
-        outputs = [zig_out],
-        arguments = [args],
-        mnemonic = "ZigTranslateC",
-        progress_message = "zig translate-c %{label}",
-        execution_requirements = {tag: "" for tag in ctx.attr.tags},
-        xcode_path_resolve_level = apple_support.xcode_path_resolve_level.args,
-        env = {
-            "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
-            "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
-            "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
-        },
-        tools = zigtoolchaininfo.zig_files,
-        toolchain = "//zig:toolchain_type",
-        apple_fragment = ctx.fragments.apple,
-        xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig],
-    )
+
+    if apple_support.target_os_from_rule_ctx(ctx, fail_on_missing_constraint = False):
+        apple_support.run(
+            actions = ctx.actions,
+            executable = ctx.executable._translate_c,
+            inputs = depset(
+                direct = inputs,
+                transitive = transitive_inputs,
+            ),
+            outputs = [zig_out],
+            arguments = [args],
+            mnemonic = "ZigTranslateC",
+            progress_message = "zig translate-c %{label}",
+            execution_requirements = {tag: "" for tag in ctx.attr.tags},
+            xcode_path_resolve_level = apple_support.xcode_path_resolve_level.args,
+            env = {
+                "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+                "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
+                "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+            },
+            tools = zigtoolchaininfo.zig_files,
+            toolchain = "//zig:toolchain_type",
+            apple_fragment = ctx.fragments.apple,
+            xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig],
+        )
+    else:
+        ctx.actions.run(
+            inputs = depset(
+                direct = inputs,
+                transitive = transitive_inputs,
+            ),
+            executable = ctx.executable._translate_c,
+            outputs = [zig_out],
+            arguments = [args],
+            mnemonic = "ZigTranslateC",
+            progress_message = "zig translate-c %{label}",
+            execution_requirements = {tag: "" for tag in ctx.attr.tags},
+            env = {
+                "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+                "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
+                "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+            },
+            tools = zigtoolchaininfo.zig_files,
+            toolchain = "//zig:toolchain_type",
+        )
 
     # Only forward the linking context since compilation_context is now handled
     # by Zig through the generated _c.zig.
