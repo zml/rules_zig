@@ -101,8 +101,6 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
             variables = c_compile_variables,
         )
 
-        print(cc_toolchain.built_in_include_directories)
-
         transitive_inputs.append(cc_toolchain.all_files)
         args.add_all([
             d.replace("external/toolchains_llvm_bootstrapped+/toolchain/", "")
