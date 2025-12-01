@@ -9,6 +9,28 @@ load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("//zig/private:cc_helper.bzl", "find_cc_toolchain")
 load("//zig/private/providers:zig_module_info.bzl", "ZigModuleInfo", "zig_module_info")
 
+def _extract_sysroot(command_line):
+    rewritten = []
+    sysroot = None
+    waiting_for_sysroot = False
+
+    for arg in command_line:
+        if waiting_for_sysroot:
+            sysroot = arg
+            waiting_for_sysroot = False
+        elif arg == "-isysroot":
+            waiting_for_sysroot = True
+        elif arg.startswith("-isysroot"):
+            # rare compact form: -isysroot/path
+            sysroot = arg[len("-isysroot"):]
+        else:
+            rewritten.append(arg)
+
+    if waiting_for_sysroot:
+        fail("-isysroot without following path in command_line")
+
+    return rewritten, sysroot
+
 def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args, cc_infos, output_prefix = ""):
     """Handle translate-c build action.
 
@@ -80,12 +102,21 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
         )
 
         print(cc_toolchain.built_in_include_directories)
+
         transitive_inputs.append(cc_toolchain.all_files)
         args.add_all([
             d.replace("external/toolchains_llvm_bootstrapped+/toolchain/", "")
             for d in cc_toolchain.built_in_include_directories
         ], before_each = "-isystem")
-        args.add_all(command_line)
+
+        # args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
+
+        rewritten, sysroot = _extract_sysroot(command_line)
+        if sysroot != None or sysroot != "/dev/null":
+            rewritten.append("--sysroot=%s" % sysroot)
+        args.add_all(rewritten)
+
+        # args.add_all(command_line)
 
     args.add_all([
         "--emulate=clang",
