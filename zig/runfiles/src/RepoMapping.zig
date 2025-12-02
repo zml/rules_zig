@@ -29,11 +29,18 @@ content: []const u8,
 
 pub const InitError = ParseError || (if (builtin.zig_version.major == 0 and builtin.zig_version.minor == 11)
     std.os.OpenError || std.os.PReadError || std.os.RealPathError
+else if (builtin.zig_version.major == 0 and builtin.zig_version.minor <= 15)
+    std.posix.OpenError || std.posix.PReadError || std.posix.RealPathError
 else
-    std.posix.OpenError || std.posix.PReadError || std.posix.RealPathError);
+    std.Io.File.OpenError || std.Io.Reader.LimitedAllocError || std.fs.Dir.RealPathAllocError);
+
+pub const init = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+    init_io
+else
+    init_non_io;
 
 /// Reads the given file into memory and parses the repo-mapping file format.
-pub fn init(allocator: std.mem.Allocator, file_path: []const u8) InitError!RepoMapping {
+pub fn init_non_io(allocator: std.mem.Allocator, file_path: []const u8) InitError!RepoMapping {
     const content = std.fs.cwd().readFileAlloc(allocator, file_path, std.math.maxInt(usize)) catch |e| {
         log.err("Failed to open repository mapping ({s}) at '{s}'", .{
             @errorName(e),
@@ -41,6 +48,26 @@ pub fn init(allocator: std.mem.Allocator, file_path: []const u8) InitError!RepoM
         });
         return e;
     };
+    errdefer allocator.free(content);
+    const mapping = try parse(allocator, content, file_path);
+    return .{
+        .mapping = mapping,
+        .content = content,
+    };
+}
+
+pub fn init_io(allocator: std.mem.Allocator, io: std.Io, file_path: []const u8) InitError!RepoMapping {
+    const file = std.Io.Dir.cwd().openFile(io, file_path, .{}) catch |e| {
+        log.err("Failed to open repository mapping ({s}) at '{s}'", .{
+            @errorName(e),
+            file_path,
+        });
+        return e;
+    };
+    defer file.close(io);
+    var buf: [1024]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     errdefer allocator.free(content);
     const mapping = try parse(allocator, content, file_path);
     return .{
@@ -208,13 +235,11 @@ test "RepoMapping init from file" {
             \\protobuf~3.19.2,protobuf,protobuf~3.19.2
         );
     } else {
-        try tmp.dir.writeFile(.{
-            .sub_path = "_repo_mapping",
-            .data =
-                \\,my_module,my_workspace
-                \\,my_protobuf,protobuf~3.19.2
-                \\,my_workspace,my_workspace
-                \\protobuf~3.19.2,protobuf,protobuf~3.19.2
+        try tmp.dir.writeFile(.{ .sub_path = "_repo_mapping", .data = 
+            \\,my_module,my_workspace
+            \\,my_protobuf,protobuf~3.19.2
+            \\,my_workspace,my_workspace
+            \\protobuf~3.19.2,protobuf,protobuf~3.19.2
         });
     }
     const mapping_path = try tmp.dir.realpathAlloc(std.testing.allocator, "_repo_mapping");

@@ -6,8 +6,8 @@ genrule(
     name = "dummy",
     outs = ["dummy.sh"],
     cmd = "echo '#!/bin/sh\necho Dummy' > $@",
-    visibility = ["//zig:__subpackages__"],
     executable = True,
+    visibility = ["//zig:__subpackages__"],
 )
 
 alias(
@@ -16,7 +16,7 @@ alias(
         "//zig/settings:translate_c_enabled": "@@//translate-c:translate-c",
         "//conditions:default": ":dummy",
     }),
-    visibility = ["//zig:__subpackages__"],
+    visibility = ["//visibility:public"],
 )
 
 alias(
@@ -24,7 +24,7 @@ alias(
     actual = select({
         "//conditions:default": "@@//translate-c:helpers",
     }),
-    visibility = ["//zig:__subpackages__"],
+    visibility = ["//visibility:public"],
 )
 
 alias(
@@ -32,7 +32,7 @@ alias(
     actual = select({
         "//conditions:default": "@@//translate-c:c_builtins",
     }),
-    visibility = ["//zig:__subpackages__"],
+    visibility = ["//visibility:public"],
 )
 
 bzl_library(

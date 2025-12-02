@@ -55,7 +55,10 @@ pub fn create(options: CreateOptions) CreateError!?Runfiles {
         switch (result) {
             .manifest => |path| {
                 defer options.allocator.free(path);
-                const manifest = try Manifest.init(options.allocator, path);
+                const manifest = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+                    try Manifest.init(options.allocator, options.io, path)
+                else
+                    try Manifest.init(options.allocator, path);
                 break :discover Implementation{ .manifest = manifest };
             },
             .directory => |path| {
@@ -67,7 +70,10 @@ pub fn create(options: CreateOptions) CreateError!?Runfiles {
     };
     errdefer implementation.deinit(options.allocator);
 
-    const repo_mapping = try implementation.loadRepoMapping(options.allocator);
+    const repo_mapping = try if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+        implementation.loadRepoMapping(options.allocator, options.io)
+    else
+        implementation.loadRepoMapping(options.allocator);
 
     return Runfiles{
         .implementation = implementation,
@@ -141,7 +147,10 @@ pub const WithSourceRepo = struct {
     };
 
     fn validateRPath(rpath: []const u8) !void {
-        var iter = try std.fs.path.componentIterator(rpath);
+        var iter = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+            std.fs.path.componentIterator(rpath)
+        else
+            try std.fs.path.componentIterator(rpath);
 
         if (iter.root() != null)
             return error.RPathIsAbsolute;
@@ -248,7 +257,12 @@ const Implementation = union(discovery.Strategy) {
         }
     }
 
-    pub fn loadRepoMapping(self: *const Implementation, allocator: std.mem.Allocator) !?RepoMapping {
+    pub const loadRepoMapping = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+        loadRepoMapping_io
+    else
+        loadRepoMapping_non_io;
+
+    pub fn loadRepoMapping_non_io(self: *const Implementation, allocator: std.mem.Allocator) !?RepoMapping {
         // Bazel <7 with bzlmod disabled does not generate a repo-mapping.
         const msg_not_found = "No repository mapping found. " ++
             "This is likely an error if you are using Bazel version >=7 with bzlmod enabled.";
@@ -263,6 +277,29 @@ const Implementation = union(discovery.Strategy) {
         defer allocator.free(path);
 
         return RepoMapping.init(allocator, path) catch |e| switch (e) {
+            error.FileNotFound => {
+                log.warn(msg_not_found, .{});
+                return null;
+            },
+            else => |e_| return e_,
+        };
+    }
+
+    pub fn loadRepoMapping_io(self: *const Implementation, allocator: std.mem.Allocator, io: std.Io) !?RepoMapping {
+        // Bazel <7 with bzlmod disabled does not generate a repo-mapping.
+        const msg_not_found = "No repository mapping found. " ++
+            "This is likely an error if you are using Bazel version >=7 with bzlmod enabled.";
+
+        const path = try self.rlocationUnmappedAlloc(allocator, .{
+            .repo = "",
+            .path = discovery.repo_mapping_file_name,
+        }) orelse {
+            log.warn(msg_not_found, .{});
+            return null;
+        };
+        defer allocator.free(path);
+
+        return RepoMapping.init(allocator, io, path) catch |e| switch (e) {
             error.FileNotFound => {
                 log.warn(msg_not_found, .{});
                 return null;

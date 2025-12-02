@@ -32,18 +32,32 @@ pub const Location = union(Strategy) {
     }
 };
 
-pub const DiscoverOptions = struct {
-    /// Used during runfiles discovery.
-    allocator: std.mem.Allocator,
-    /// User override for the `RUNFILES_MANIFEST_FILE` variable.
-    manifest: ?[]const u8 = null,
-    /// User override for the `RUNFILES_DIRECTORY` variable.
-    directory: ?[]const u8 = null,
-    /// User override for `argv[0]`.
-    argv0: ?[]const u8 = null,
-};
+pub const DiscoverOptions = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+    struct {
+        /// Used during runfiles discovery.
+        allocator: std.mem.Allocator,
+        /// Used for IO operations during discovery.
+        io: std.Io,
+        /// User override for the `RUNFILES_MANIFEST_FILE` variable.
+        manifest: ?[]const u8 = null,
+        /// User override for the `RUNFILES_DIRECTORY` variable.
+        directory: ?[]const u8 = null,
+        /// User override for `argv[0]`.
+        argv0: ?[]const u8 = null,
+    }
+else
+    struct {
+        /// Used during runfiles discovery.
+        allocator: std.mem.Allocator,
+        /// User override for the `RUNFILES_MANIFEST_FILE` variable.
+        manifest: ?[]const u8 = null,
+        /// User override for the `RUNFILES_DIRECTORY` variable.
+        directory: ?[]const u8 = null,
+        /// User override for `argv[0]`.
+        argv0: ?[]const u8 = null,
+    };
 
-pub const DiscoverError = if (builtin.zig_version.major == 0 and builtin.zig_version.minor == 11)
+pub const DiscoverError = std.fmt.BufPrintError || if (builtin.zig_version.major == 0 and builtin.zig_version.minor == 11)
     error{
         OutOfMemory,
         InvalidCmdLine,
@@ -86,31 +100,23 @@ pub fn discoverRunfiles(options: DiscoverOptions) DiscoverError!?Location {
     const argv0 = options.argv0 orelse iter.next() orelse
         return error.MissingArg0;
 
-    var buffer = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 15)
-        std.array_list.Managed(u8).init(options.allocator)
-    else
-        std.ArrayList(u8).init(options.allocator);
-    defer buffer.deinit();
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
 
-    buffer.clearRetainingCapacity();
-    try buffer.writer().print("{s}{s}", .{ argv0, runfiles_manifest_suffix });
-    if (isReadableFile(buffer.items))
-        return .{ .manifest = try buffer.toOwnedSlice() };
+    var path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_manifest_suffix });
+    if (isReadableFile(path))
+        return .{ .manifest = try options.allocator.dupe(u8, path) };
 
-    buffer.clearRetainingCapacity();
-    try buffer.writer().print("{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
-    if (isReadableFile(buffer.items))
-        return .{ .manifest = try buffer.toOwnedSlice() };
+    path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
+    if (isReadableFile(path))
+        return .{ .manifest = try options.allocator.dupe(u8, path) };
 
-    buffer.clearRetainingCapacity();
-    try buffer.writer().print("{s}{s}", .{ argv0, runfiles_directory_suffix });
-    if (isOpenableDir(buffer.items))
-        return .{ .directory = try buffer.toOwnedSlice() };
+    path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_directory_suffix });
+    if (isOpenableDir(path))
+        return .{ .directory = try options.allocator.dupe(u8, path) };
 
-    buffer.clearRetainingCapacity();
-    try buffer.writer().print("{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
-    if (isOpenableDir(buffer.items))
-        return .{ .directory = try buffer.toOwnedSlice() };
+    path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
+    if (isOpenableDir(path))
+        return .{ .directory = try options.allocator.dupe(u8, path) };
 
     return null;
 }

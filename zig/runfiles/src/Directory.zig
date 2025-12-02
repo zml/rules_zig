@@ -33,14 +33,13 @@ pub fn rlocationUnmapped(
     rpath: RPath,
     out_buffer: []u8,
 ) error{NoSpaceLeft}![]const u8 {
-    var stream = std.io.fixedBufferStream(out_buffer);
-    // TODO[AH] Implement OS specific normalization, e.g. Windows lower-case.
-    try stream.writer().writeAll(self.path);
+    var out: []u8 = &.{};
+    out = try std.fmt.bufPrint(out_buffer[out.len..], "{s}", .{self.path});
     if (rpath.repo.len > 0)
-        try stream.writer().print("/{s}", .{rpath.repo});
+        out = try std.fmt.bufPrint(out_buffer[out.len..], "{s}/{s}", .{ out, rpath.repo });
     if (rpath.path.len > 0)
-        try stream.writer().print("/{s}", .{rpath.path});
-    return stream.getWritten();
+        out = try std.fmt.bufPrint(out_buffer[out.len..], "{s}/{s}", .{ out, rpath.path });
+    return out;
 }
 
 pub fn rlocationUnmappedAlloc(

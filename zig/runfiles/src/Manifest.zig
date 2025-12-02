@@ -33,17 +33,45 @@ path: []const u8,
 
 pub const InitError = ParseError || std.mem.Allocator.Error || (if (builtin.zig_version.major == 0 and builtin.zig_version.minor == 11)
     std.os.OpenError || std.os.PReadError || std.os.RealPathError
+else if (builtin.zig_version.major == 0 and builtin.zig_version.minor <= 15)
+    std.posix.OpenError || std.posix.PReadError || std.posix.RealPathError
 else
-    std.posix.OpenError || std.posix.PReadError || std.posix.RealPathError);
+    std.Io.File.OpenError || std.Io.Reader.LimitedAllocError || std.fs.Dir.RealPathAllocError);
 
-pub fn init(allocator: std.mem.Allocator, path: []const u8) InitError!Manifest {
-    const content = std.fs.cwd().readFileAlloc(allocator, path, std.math.maxInt(usize)) catch |e| {
+pub const init = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+    init_io
+else
+    init_non_io;
+
+pub fn init_non_io(allocator: std.mem.Allocator, path: []const u8) InitError!Manifest {
+    const content = std.fs.cwd().readFileAlloc(path, allocator, std.math.maxInt(usize)) catch |e| {
         log.err("Failed to open runfiles manifest ({s}) at '{s}'", .{
             @errorName(e),
             path,
         });
         return e;
     };
+    errdefer allocator.free(content);
+    const mapping = try parse(allocator, content);
+    return .{
+        .mapping = mapping,
+        .content = content,
+        .path = try std.fs.cwd().realpathAlloc(allocator, path),
+    };
+}
+
+pub fn init_io(allocator: std.mem.Allocator, io: std.Io, path: []const u8) InitError!Manifest {
+    const file = std.Io.Dir.cwd().openFile(io, path, .{}) catch |e| {
+        log.err("Failed to open runfiles manifest ({s}) at '{s}'", .{
+            @errorName(e),
+            path,
+        });
+        return e;
+    };
+    defer file.close(io);
+    var buf: [1024]u8 = undefined;
+    var file_reader = file.reader(io, &buf);
+    const content = try file_reader.interface.allocRemaining(allocator, .unlimited);
     errdefer allocator.free(content);
     const mapping = try parse(allocator, content);
     return .{
@@ -153,11 +181,9 @@ test "RunfilesManifest init unmapped lookup" {
             \\_repo_mapping /absolute/path/to/_repo_mapping
         );
     } else {
-        try tmp.dir.writeFile(.{
-            .sub_path = "test.runfiles_manifest",
-            .data =
-                \\my_workspace/some/package/some_file /absolute/path/to/some/package/some_file
-                \\_repo_mapping /absolute/path/to/_repo_mapping
+        try tmp.dir.writeFile(.{ .sub_path = "test.runfiles_manifest", .data = 
+            \\my_workspace/some/package/some_file /absolute/path/to/some/package/some_file
+            \\_repo_mapping /absolute/path/to/_repo_mapping
         });
     }
 
