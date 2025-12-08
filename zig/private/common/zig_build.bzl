@@ -189,6 +189,17 @@ Environment variables to inherit from external environment when executed by `baz
         doc = "Optional Zig file to specify a custom test runner",
         mandatory = False,
     ),
+    "_translate_c": attr.label(
+        default = Label(":translate-c"),
+        cfg = "exec",
+        executable = True,
+    ),
+    "_c_helpers": attr.label(
+        default = Label(":helpers"),
+    ),
+    "_c_builtins": attr.label(
+        default = Label(":c_builtins"),
+    ),
 }
 
 TOOLCHAINS = [
