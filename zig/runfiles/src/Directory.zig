@@ -33,13 +33,13 @@ pub fn rlocationUnmapped(
     rpath: RPath,
     out_buffer: []u8,
 ) error{NoSpaceLeft}![]const u8 {
-    var out: []u8 = &.{};
-    out = try std.fmt.bufPrint(out_buffer[out.len..], "{s}", .{self.path});
+    var writer = std.Io.Writer.fixed(out_buffer);
+    writer.print("{s}", .{self.path}) catch return error.NoSpaceLeft;
     if (rpath.repo.len > 0)
-        out = try std.fmt.bufPrint(out_buffer[out.len..], "{s}/{s}", .{ out, rpath.repo });
+        writer.print("/{s}", .{rpath.repo}) catch return error.NoSpaceLeft;
     if (rpath.path.len > 0)
-        out = try std.fmt.bufPrint(out_buffer[out.len..], "{s}/{s}", .{ out, rpath.path });
-    return out;
+        writer.print("/{s}", .{rpath.path}) catch return error.NoSpaceLeft;
+    return writer.buffered();
 }
 
 pub fn rlocationUnmappedAlloc(
