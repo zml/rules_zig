@@ -102,12 +102,7 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
         )
 
         transitive_inputs.append(cc_toolchain.all_files)
-        args.add_all([
-            d.replace("external/toolchains_llvm_bootstrapped+/toolchain/", "")
-            for d in cc_toolchain.built_in_include_directories
-        ], before_each = "-isystem")
-
-        # args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
+        args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
 
         rewritten, sysroot = _extract_sysroot(command_line)
         if sysroot != None or sysroot != "/dev/null":
