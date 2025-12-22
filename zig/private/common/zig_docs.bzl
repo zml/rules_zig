@@ -150,6 +150,7 @@ The `cdeps` attribute of `zig_build` is deprecated, use `deps` instead.
         c_module = zig_translate_c(
             ctx = ctx,
             name = "c",
+            canonical_name = "c",
             zigtoolchaininfo = zigtoolchaininfo,
             global_args = global_args,
             cc_infos = [root_module.cc_info],

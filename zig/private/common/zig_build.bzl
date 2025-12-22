@@ -146,6 +146,17 @@ SHARED_LIBRARY_ATTRS = {
         doc = "",
         mandatory = False,
     ),
+    "_translate_c": attr.label(
+        default = Label(":translate-c"),
+        cfg = "exec",
+        executable = True,
+    ),
+    "_c_helpers": attr.label(
+        default = Label(":helpers"),
+    ),
+    "_c_builtins": attr.label(
+        default = Label(":c_builtins"),
+    ),
 }
 
 BINARY_ATTRS = {
