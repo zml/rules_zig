@@ -36,7 +36,7 @@ pub const InitError = ParseError || std.mem.Allocator.Error || (if (builtin.zig_
 else if (builtin.zig_version.major == 0 and builtin.zig_version.minor <= 15)
     std.posix.OpenError || std.posix.PReadError || std.posix.RealPathError
 else
-    std.Io.File.OpenError || std.Io.Reader.LimitedAllocError || std.fs.Dir.RealPathAllocError);
+    std.Io.File.OpenError || std.Io.Reader.LimitedAllocError || std.Io.Dir.RealPathFileAllocError);
 
 pub const init = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
     init_io
@@ -77,7 +77,7 @@ pub fn init_io(allocator: std.mem.Allocator, io: std.Io, path: []const u8) InitE
     return .{
         .mapping = mapping,
         .content = content,
-        .path = try std.fs.cwd().realpathAlloc(allocator, path),
+        .path = try std.Io.Dir.cwd().realPathFileAlloc(io, path, allocator),
     };
 }
 
@@ -181,7 +181,7 @@ test "RunfilesManifest init unmapped lookup" {
             \\_repo_mapping /absolute/path/to/_repo_mapping
         );
     } else {
-        try tmp.dir.writeFile(.{ .sub_path = "test.runfiles_manifest", .data = 
+        try tmp.dir.writeFile(.{ .sub_path = "test.runfiles_manifest", .data =
             \\my_workspace/some/package/some_file /absolute/path/to/some/package/some_file
             \\_repo_mapping /absolute/path/to/_repo_mapping
         });

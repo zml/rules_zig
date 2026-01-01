@@ -32,7 +32,7 @@ pub const InitError = ParseError || (if (builtin.zig_version.major == 0 and buil
 else if (builtin.zig_version.major == 0 and builtin.zig_version.minor <= 15)
     std.posix.OpenError || std.posix.PReadError || std.posix.RealPathError
 else
-    std.Io.File.OpenError || std.Io.Reader.LimitedAllocError || std.fs.Dir.RealPathAllocError);
+    std.Io.File.OpenError || std.Io.Reader.LimitedAllocError || std.Io.Dir.RealPathFileError);
 
 pub const init = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
     init_io
@@ -235,7 +235,7 @@ test "RepoMapping init from file" {
             \\protobuf~3.19.2,protobuf,protobuf~3.19.2
         );
     } else {
-        try tmp.dir.writeFile(.{ .sub_path = "_repo_mapping", .data = 
+        try tmp.dir.writeFile(.{ .sub_path = "_repo_mapping", .data =
             \\,my_module,my_workspace
             \\,my_protobuf,protobuf~3.19.2
             \\,my_workspace,my_workspace

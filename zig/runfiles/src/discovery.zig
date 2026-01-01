@@ -102,21 +102,39 @@ pub fn discoverRunfiles(options: DiscoverOptions) DiscoverError!?Location {
 
     var buffer: [std.fs.max_path_bytes]u8 = undefined;
 
-    var path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_manifest_suffix });
-    if (isReadableFile(path))
-        return .{ .manifest = try options.allocator.dupe(u8, path) };
+    if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16) {
+        var path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_manifest_suffix });
+        if (isReadableFile(options.io, path))
+            return .{ .manifest = try options.allocator.dupe(u8, path) };
 
-    path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
-    if (isReadableFile(path))
-        return .{ .manifest = try options.allocator.dupe(u8, path) };
+        path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
+        if (isReadableFile(options.io, path))
+            return .{ .manifest = try options.allocator.dupe(u8, path) };
 
-    path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_directory_suffix });
-    if (isOpenableDir(path))
-        return .{ .directory = try options.allocator.dupe(u8, path) };
+        path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_directory_suffix });
+        if (isOpenableDir(options.io, path))
+            return .{ .directory = try options.allocator.dupe(u8, path) };
 
-    path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
-    if (isOpenableDir(path))
-        return .{ .directory = try options.allocator.dupe(u8, path) };
+        path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
+        if (isOpenableDir(options.io, path))
+            return .{ .directory = try options.allocator.dupe(u8, path) };
+    } else {
+        var path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_manifest_suffix });
+        if (isReadableFile(path))
+            return .{ .manifest = try options.allocator.dupe(u8, path) };
+
+        path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
+        if (isReadableFile(path))
+            return .{ .manifest = try options.allocator.dupe(u8, path) };
+
+        path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_directory_suffix });
+        if (isOpenableDir(path))
+            return .{ .directory = try options.allocator.dupe(u8, path) };
+
+        path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
+        if (isOpenableDir(path))
+            return .{ .directory = try options.allocator.dupe(u8, path) };
+    }
 
     return null;
 }
@@ -128,15 +146,37 @@ fn getEnvVar(allocator: std.mem.Allocator, key: []const u8) !?[]const u8 {
     };
 }
 
-fn isReadableFile(file_path: []const u8) bool {
+pub const isReadableFile = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+    isReadableFile_io
+else
+    isReadableFile_fs;
+
+fn isReadableFile_fs(file_path: []const u8) bool {
     var file = std.fs.cwd().openFile(file_path, .{}) catch return false;
     file.close();
     return true;
 }
 
-fn isOpenableDir(dir_path: []const u8) bool {
+fn isReadableFile_io(io: std.Io, file_path: []const u8) bool {
+    var file = std.Io.Dir.cwd().openFile(io, file_path, .{}) catch return false;
+    file.close(io);
+    return true;
+}
+
+pub const isOpenableDir = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+    isOpenableDir_io
+else
+    isOpenableDir_fs;
+
+fn isOpenableDir_fs(dir_path: []const u8) bool {
     var dir = std.fs.cwd().openDir(dir_path, .{}) catch return false;
     dir.close();
+    return true;
+}
+
+fn isOpenableDir_io(io: std.Io, dir_path: []const u8) bool {
+    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{}) catch return false;
+    dir.close(io);
     return true;
 }
 

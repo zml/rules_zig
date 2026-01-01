@@ -63,7 +63,10 @@ pub fn create(options: CreateOptions) CreateError!?Runfiles {
             },
             .directory => |path| {
                 defer options.allocator.free(path);
-                const directory = try Directory.init(options.allocator, path);
+                const directory = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+                    try Directory.init(options.allocator, options.io, path)
+                else
+                    try Directory.init(options.allocator, path);
                 break :discover Implementation{ .directory = directory };
             },
         }
@@ -323,7 +326,7 @@ test "Runfiles from manifest" {
         try tmp.dir.writeFile("some/package/some_file", "some_content");
         try tmp.dir.writeFile("other/package/other_file", "other_content");
     } else {
-        try tmp.dir.writeFile(.{ .sub_path = "test.repo_mapping", .data = 
+        try tmp.dir.writeFile(.{ .sub_path = "test.repo_mapping", .data =
             \\,my_module,my_workspace
             \\,other_module,other~3.4.5
             \\their_module~1.2.3,another_module,other~3.4.5
@@ -438,7 +441,7 @@ test "Runfiles from directory" {
         try tmp.dir.writeFile("some/package/some_file", "some_content");
         try tmp.dir.writeFile("other/package/other_file", "other_content");
     } else {
-        try tmp.dir.writeFile(.{ .sub_path = "test.repo_mapping", .data = 
+        try tmp.dir.writeFile(.{ .sub_path = "test.repo_mapping", .data =
             \\,my_module,my_workspace
             \\,other_module,other~3.4.5
             \\their_module~1.2.3,another_module,other~3.4.5

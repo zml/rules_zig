@@ -14,11 +14,25 @@ path: []const u8,
 
 pub const InitError = std.mem.Allocator.Error || (if (builtin.zig_version.major == 0 and builtin.zig_version.minor == 11)
     std.os.OpenError || std.os.RealPathError
+else if (builtin.zig_version.major == 0 and builtin.zig_version.minor <= 15)
+    std.posix.OpenError || std.posix.RealPathError
 else
-    std.posix.OpenError || std.posix.RealPathError);
+    std.Io.Dir.RealPathFileError);
 
-pub fn init(allocator: std.mem.Allocator, path: []const u8) InitError!Directory {
+pub const init = if (builtin.zig_version.major == 0 and builtin.zig_version.minor <= 15)
+    init_015
+else
+    init_016;
+
+pub fn init_015(allocator: std.mem.Allocator, path: []const u8) InitError!Directory {
     const absolute = try std.fs.cwd().realpathAlloc(allocator, path);
+    errdefer allocator.free(absolute);
+    // TODO[AH] Implement OS specific normalization, e.g. Windows lower-case.
+    return .{ .path = absolute };
+}
+
+pub fn init_016(allocator: std.mem.Allocator, io: std.Io, path: []const u8) InitError!Directory {
+    const absolute = try std.Io.Dir.cwd().realPathFileAlloc(io, path, allocator);
     errdefer allocator.free(absolute);
     // TODO[AH] Implement OS specific normalization, e.g. Windows lower-case.
     return .{ .path = absolute };
