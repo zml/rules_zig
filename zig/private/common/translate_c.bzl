@@ -31,6 +31,16 @@ def _extract_sysroot(command_line):
 
     return rewritten, sysroot
 
+def _include_path_for_file(file):
+    if (file.is_source == False):
+        virtual_include_prefix = "/_virtual_includes/{}/".format(file.owner.name)
+        virtual_include_idx = file.path.find(virtual_include_prefix)
+        if (virtual_include_idx > 0):
+            return file.path[virtual_include_idx + len(virtual_include_prefix):]
+    if (file.owner.repo_name):
+        return file.path.removeprefix(file.owner.workspace_root + "/")
+    return file.path
+
 def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args, cc_infos, output_prefix = ""):
     """Handle translate-c build action.
 
@@ -81,7 +91,7 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
 
     hdr = ctx.actions.declare_file("{}{}_c.h".format(output_prefix, ctx.label.name))
     ctx.actions.write(hdr, "\n".join([
-        '#include "{}"'.format(hdr.path)
+        '#include "{}"'.format(_include_path_for_file(hdr))
         for hdr in hdrs
     ]))
     inputs.append(hdr)
