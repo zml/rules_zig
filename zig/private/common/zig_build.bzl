@@ -117,6 +117,10 @@ Use this at your own risk of hitting undefined behaviors.
         doc = "Additional list of flags passed to the linker. Subject to location expansion.",
         mandatory = False,
     ),
+    "emit": attr.string(
+        doc = "The emitted format",
+        mandatory = False,
+    ),
     "_settings": attr.label(
         default = "//zig/settings",
         doc = "Zig build settings.",
@@ -211,6 +215,7 @@ def zig_build_impl(ctx, *, kind):
     zigtargetinfo = ctx.toolchains["//zig/target:toolchain_type"].zigtargetinfo
 
     use_cc_common_link = ctx.attr._settings[ZigSettingsInfo].use_cc_common_link
+    emit_kind = ctx.attr.emit
 
     providers = []
     exported_library_to_link = None
@@ -271,7 +276,14 @@ def zig_build_impl(ctx, *, kind):
     default_output = None
     solib_parents = []
     if kind == "zig_binary" or kind == "zig_test":
-        default_output_name = ctx.label.name + _executable_extension(zigtargetinfo.triple.os)
+        emit_kind = emit_kind or "bin"
+        if emit_kind == "bin":
+            default_output_name = ctx.label.name + _executable_extension(zigtargetinfo.triple.os)
+        elif emit_kind == "asm":
+            default_output_name = ctx.label.name + ".s"
+        else:
+            fail("Unsupported emit=" + emit_kind)
+
         default_output = ctx.actions.declare_file(default_output_name)
         default_output_is_executable = True
 
@@ -539,7 +551,9 @@ def zig_build_impl(ctx, *, kind):
                 user_link_flags = linkopts,
             )
         else:
-            args.add(default_output, format = "-femit-bin=%s")
+            args.add(default_output, format = "-femit-" + emit_kind + "=%s")
+            if emit_kind != "bin":
+                args.add("-fno-emit-bin")
 
             ctx.actions.run(
                 outputs = [default_output],
