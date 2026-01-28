@@ -7,6 +7,7 @@ Collection of all active Zig build settings.
 FIELDS = {
     "mode": "The Zig build mode.",
     "use_cc_common_link": "Whether to use cc_common.link to link zig binaries, tests and shared libraries.",
+    "emit": "The file format to emit, default depends on the target kind (binary, object, ...)",
     "threaded": "The Zig multi- or single-threaded setting.",
     "args": "The collected compiler arguments for all active settings.",
 }
