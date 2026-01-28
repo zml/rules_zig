@@ -219,7 +219,7 @@ def zig_build_impl(ctx, *, kind):
 
     Args:
       ctx: Bazel rule context object.
-      kind: String; The kind of the rule, one of `zig_binary`, `zig_static_library`, `zig_shared_library`, `zig_test`.
+      kind: String; The kind of the rule, one of `zig_binary`, `zig_static_library`, `zig_shared_library`, `zig_test`, `zig_asm`.
 
     Returns:
       List of providers.
@@ -306,6 +306,9 @@ def zig_build_impl(ctx, *, kind):
             "/".join([".." for _ in ctx.label.package.split("/")]),
             paths.join(default_output.basename + ".runfiles", ctx.workspace_name),
         ]
+    elif kind == "zig_asm":
+        default_output_name = ctx.label.name + ".s"
+        default_output = ctx.actions.declare_file(default_output_name)
     elif kind == "zig_static_library":
         default_output = ctx.actions.declare_file(_lib_prefix(zigtargetinfo.triple.os) + ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
     elif kind == "zig_shared_library":
@@ -453,7 +456,7 @@ buildozer 'move cdeps deps *' {target}
         strings = ctx.attr.linkopts,
     )
 
-    if not use_cc_common_link and kind != "zig_static_library":
+    if not use_cc_common_link and kind != "zig_static_library" and kind != "zig_asm":
         args.add_all(linkopts)
 
     if kind == "zig_binary":
@@ -578,6 +581,20 @@ buildozer 'move cdeps deps *' {target}
                 progress_message = "zig test %{label}",
                 **zig_build_kwargs
             )
+    elif kind == "zig_asm":
+        # Emit assembly only. We intentionally do not link and do not emit a binary output.
+        asm_args = ctx.actions.args()
+        asm_args.add("-fno-emit-bin")
+        asm_args.add(default_output, format = "-femit-asm=%s")
+        ctx.actions.run(
+            outputs = [default_output],
+            inputs = inputs,
+            executable = zigtoolchaininfo.zig_exe_path,
+            arguments = ["build-obj", global_args, args, asm_args],
+            mnemonic = "ZigBuildAsm",
+            progress_message = "zig build-obj -femit-asm %{label}",
+            **zig_build_kwargs
+        )
     elif kind == "zig_static_library":
         args.add(default_output, format = "-femit-bin=%s")
         ctx.actions.run(
