@@ -8,9 +8,9 @@ pub fn main() !void {
         var buffer: [512]u8 = undefined;
         var writer = std.fs.File.stdout().writer(&buffer);
         const stdout = &writer.interface;
-        try stdout.print("local={}\nglobal={}\n", .{module.local(), c.global()});
+        try stdout.print("local={}\nglobal={}\n", .{ module.local(), c.global() });
         try stdout.flush();
     } else {
-        try std.io.getStdOut().writer().print("local={}\nglobal={}\n", .{module.local(), c.global()});
+        try std.io.getStdOut().writer().print("local={}\nglobal={}\n", .{ module.local(), c.global() });
     }
 }

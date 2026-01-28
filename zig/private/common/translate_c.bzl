@@ -1,5 +1,6 @@
 """Handle translate-c pass."""
 
+load("@rules_cc//cc:action_names.bzl", "C_COMPILE_ACTION_NAME")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
@@ -61,7 +62,28 @@ def zig_translate_c(*, ctx, name, zigtoolchaininfo, global_args, cc_infos, outpu
         transitive_inputs.append(cc_toolchain.all_files)
         args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
 
+        feature_configuration = cc_common.configure_features(
+            ctx = ctx,
+            cc_toolchain = cc_toolchain,
+            requested_features = [],
+            unsupported_features = [],
+        )
+        c_compile_variables = cc_common.create_compile_variables(
+            feature_configuration = feature_configuration,
+            cc_toolchain = cc_toolchain,
+            user_compile_flags = ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts,
+        )
+        command_line = cc_common.get_memory_inefficient_command_line(
+            feature_configuration = feature_configuration,
+            action_name = C_COMPILE_ACTION_NAME,
+            variables = c_compile_variables,
+        )
+        args.add_all(command_line)
+
+        # print(command_line)
+
     zig_out = ctx.actions.declare_file("{}{}_c.zig".format(output_prefix, ctx.label.name))
+    print(">>>>>>>", args)
     ctx.actions.run_shell(
         command = "${{@}} > {}".format(zig_out.path),
         inputs = depset(
@@ -73,6 +95,11 @@ def zig_translate_c(*, ctx, name, zigtoolchaininfo, global_args, cc_infos, outpu
         mnemonic = "ZigTranslateC",
         progress_message = "zig translate-c %{label}",
         execution_requirements = {tag: "" for tag in ctx.attr.tags},
+        env = {
+            "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+            "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
+            "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+        },
         tools = zigtoolchaininfo.zig_files,
         toolchain = "//zig:toolchain_type",
     )
