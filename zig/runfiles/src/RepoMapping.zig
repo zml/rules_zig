@@ -32,7 +32,7 @@ pub const InitError = ParseError || (if (builtin.zig_version.major == 0 and buil
 else if (builtin.zig_version.major == 0 and builtin.zig_version.minor <= 15)
     std.posix.OpenError || std.posix.PReadError || std.posix.RealPathError
 else
-    std.Io.File.OpenError || std.Io.Reader.LimitedAllocError || std.Io.Dir.RealPathFileError);
+    std.Io.File.OpenError || std.Io.Reader.LimitedAllocError || std.Io.Dir.RealPathFileAllocError);
 
 pub const init = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
     init_io

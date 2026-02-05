@@ -38,6 +38,10 @@ pub const DiscoverOptions = if (builtin.zig_version.major == 0 and builtin.zig_v
         allocator: std.mem.Allocator,
         /// Used for IO operations during discovery.
         io: std.Io,
+        /// EnvironMap
+        argv: std.process.Args,
+        /// EnvironMap
+        environ_map: *std.process.Environ.Map,
         /// User override for the `RUNFILES_MANIFEST_FILE` variable.
         manifest: ?[]const u8 = null,
         /// User override for the `RUNFILES_DIRECTORY` variable.
@@ -82,7 +86,12 @@ else
 /// * assume the binary has no runfiles.
 ///
 /// The caller has to free the path contained in the returned location.
-pub fn discoverRunfiles(options: DiscoverOptions) DiscoverError!?Location {
+pub const discoverRunfiles = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+    discoverRunfiles_016
+else
+    discoverRunfiles_pre_016;
+
+pub fn discoverRunfiles_pre_016(options: DiscoverOptions) DiscoverError!?Location {
     if (options.manifest) |value|
         return .{ .manifest = try options.allocator.dupe(u8, value) };
 
@@ -146,35 +155,74 @@ fn getEnvVar(allocator: std.mem.Allocator, key: []const u8) !?[]const u8 {
     };
 }
 
-pub const isReadableFile = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
-    isReadableFile_io
-else
-    isReadableFile_fs;
+pub fn discoverRunfiles_016(options: DiscoverOptions) DiscoverError!?Location {
+    if (options.manifest) |value|
+        return .{ .manifest = try options.allocator.dupe(u8, value) };
 
-fn isReadableFile_fs(file_path: []const u8) bool {
+    if (options.directory) |value|
+        return .{ .directory = try options.allocator.dupe(u8, value) };
+
+    if (options.environ_map.get(runfiles_manifest_var_name)) |value|
+        return .{ .manifest = value };
+
+    if (options.environ_map.get(runfiles_directory_var_name)) |value|
+        return .{ .directory = value };
+
+    var iter = try options.argv.iterateAllocator(options.allocator);
+    defer iter.deinit();
+    const argv0 = options.argv0 orelse iter.next() orelse
+        return error.MissingArg0;
+
+    var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+
+    var path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_manifest_suffix });
+    if (isReadableFile(options.io, path))
+        return .{ .manifest = try options.allocator.dupe(u8, path) };
+
+    path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_manifest_suffix });
+    if (isReadableFile(options.io, path))
+        return .{ .manifest = try options.allocator.dupe(u8, path) };
+
+    path = try std.fmt.bufPrint(&buffer, "{s}{s}", .{ argv0, runfiles_directory_suffix });
+    if (isOpenableDir(options.io, path))
+        return .{ .directory = try options.allocator.dupe(u8, path) };
+
+    path = try std.fmt.bufPrint(&buffer, "{s}.exe{s}", .{ argv0, runfiles_directory_suffix });
+    if (isOpenableDir(options.io, path))
+        return .{ .directory = try options.allocator.dupe(u8, path) };
+
+    return null;
+}
+
+pub const isReadableFile = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+    isReadableFile_016
+else
+    isReadableFile_pre_016;
+
+pub const isOpenableDir = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+    isOpenableDir_016
+else
+    isOpenableDir_pre_016;
+
+fn isReadableFile_pre_016(file_path: []const u8) bool {
     var file = std.fs.cwd().openFile(file_path, .{}) catch return false;
     file.close();
     return true;
 }
 
-fn isReadableFile_io(io: std.Io, file_path: []const u8) bool {
-    var file = std.Io.Dir.cwd().openFile(io, file_path, .{}) catch return false;
-    file.close(io);
-    return true;
-}
-
-pub const isOpenableDir = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
-    isOpenableDir_io
-else
-    isOpenableDir_fs;
-
-fn isOpenableDir_fs(dir_path: []const u8) bool {
+fn isOpenableDir_pre_016(dir_path: []const u8) bool {
     var dir = std.fs.cwd().openDir(dir_path, .{}) catch return false;
     dir.close();
     return true;
 }
 
-fn isOpenableDir_io(io: std.Io, dir_path: []const u8) bool {
+fn isReadableFile_016(io: std.Io, file_path: []const u8) bool {
+    var file = std.Io.Dir.cwd().openFile(io, file_path, .{}) catch return false;
+    file.close(io);
+    return true;
+}
+
+fn isOpenableDir_016(io: std.Io, dir_path: []const u8) bool {
     var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{}) catch return false;
     dir.close(io);
     return true;
