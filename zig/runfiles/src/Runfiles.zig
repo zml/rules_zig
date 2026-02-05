@@ -63,7 +63,10 @@ pub fn create(options: CreateOptions) CreateError!?Runfiles {
             },
             .directory => |path| {
                 defer options.allocator.free(path);
-                const directory = try Directory.init(options.allocator, path);
+                const directory = if (builtin.zig_version.major == 0 and builtin.zig_version.minor >= 16)
+                    try Directory.init(options.allocator, options.io, path)
+                else
+                    try Directory.init(options.allocator, path);
                 break :discover Implementation{ .directory = directory };
             },
         }
