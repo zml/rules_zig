@@ -201,6 +201,8 @@ def _toolchain_extension(module_ctx):
     for zig_version in versions:
         sanitized_zig_version = sanitize_version(zig_version)
         for platform, meta in PLATFORMS.items():
+            if platform not in known_versions[zig_version]:
+                continue
             repo_name = _DEFAULT_NAME + "_" + sanitized_zig_version + "_" + platform
             toolchain_names.append(repo_name)
             toolchain_labels.append("@{}//:zig_toolchain".format(repo_name))
