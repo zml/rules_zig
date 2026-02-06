@@ -17,7 +17,9 @@ load("//zig/private:zig_library.bzl", _zig_library = "zig_library")
 load("//zig/private:zig_shared_library.bzl", _zig_shared_library = "zig_shared_library")
 load("//zig/private:zig_static_library.bzl", _zig_static_library = "zig_static_library")
 load("//zig/private:zig_test.bzl", _zig_test = "zig_test")
+load("//zig/private:zig_asm.bzl", _zig_asm = "zig_asm")
 
+zig_asm = _zig_asm
 zig_binary = _zig_binary
 zig_static_library = _zig_static_library
 zig_shared_library = _zig_shared_library

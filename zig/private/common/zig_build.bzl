@@ -132,10 +132,6 @@ Use this at your own risk of hitting undefined behaviors.
         doc = "Additional list of flags passed to the linker. Subject to location expansion.",
         mandatory = False,
     ),
-    "emit": attr.string(
-        doc = "The emitted format",
-        mandatory = False,
-    ),
     "_settings": attr.label(
         default = "//zig/settings",
         doc = "Zig build settings.",
@@ -263,7 +259,6 @@ def zig_build_impl(ctx, *, kind):
     zigtargetinfo = ctx.toolchains["//zig/target:toolchain_type"].zigtargetinfo
 
     use_cc_common_link = ctx.attr._settings[ZigSettingsInfo].use_cc_common_link
-    emit_kind = ctx.attr.emit
 
     providers = []
     exported_library_to_link = None
@@ -322,8 +317,8 @@ def zig_build_impl(ctx, *, kind):
     default_output_is_executable = False
     default_output = None
     solib_parents = []
-    if kind == "zig_binary" or kind == "zig_test":
-        emit_kind = emit_kind or "bin"
+    if kind == "zig_binary" or kind == "zig_test" or kind == "zig_asm":
+        emit_kind = "bin" if kind != "zig_asm" else "asm"
         if emit_kind == "bin":
             default_output_name = ctx.label.name + _executable_extension(zigtargetinfo.triple.os)
         elif emit_kind == "asm":
@@ -332,7 +327,7 @@ def zig_build_impl(ctx, *, kind):
             fail("Unsupported emit=" + emit_kind)
 
         default_output = ctx.actions.declare_file(default_output_name)
-        default_output_is_executable = True
+        default_output_is_executable = emit_kind == "bin"
 
         # Calculate the RPATH components to discover the solib tree.
         # See https://github.com/bazelbuild/bazel/blob/7.0.0/src/main/java/com/google/devtools/build/lib/rules/cpp/LibrariesToLinkCollector.java#L177
@@ -542,6 +537,19 @@ buildozer 'move cdeps deps *' {target}
                 progress_message = "zig build-exe %{label}",
                 **zig_build_kwargs
             )
+    elif kind == "zig_asm":
+        args.add(default_output, format = "-femit-asm=%s")
+        args.add("-fno-emit-bin")
+
+        ctx.actions.run(
+            outputs = [default_output],
+            inputs = inputs,
+            executable = zigtoolchaininfo.zig_exe_path,
+            arguments = ["build-lib", global_args, args],
+            mnemonic = "ZigBuildLib",
+            progress_message = "zig build-lib -femit-asm %{label}",
+            **zig_build_kwargs
+        )
     elif kind == "zig_test":
         if use_cc_common_link:
             bc = ctx.actions.declare_file(ctx.label.name + ".bc")
@@ -602,9 +610,7 @@ buildozer 'move cdeps deps *' {target}
                 user_link_flags = linkopts,
             )
         else:
-            args.add(default_output, format = "-femit-" + emit_kind + "=%s")
-            if emit_kind != "bin":
-                args.add("-fno-emit-bin")
+            args.add(default_output, format = "-femit-bin=%s")
 
             ctx.actions.run(
                 outputs = [default_output],
