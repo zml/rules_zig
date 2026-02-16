@@ -113,7 +113,6 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
     args.add(hdr)
 
     args.add_all([
-        "--emulate=clang",
         "-undef",
         "-nobuiltininc",
         "-fmodule-libs",
@@ -171,6 +170,7 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
 
     zig_out = ctx.actions.declare_file("{}{}_c.zig".format(output_prefix, ctx.label.name))
     args.add("-o", zig_out)
+    args.add("--emulate=clang")
 
     actions_run = ctx.actions.run
     actions_run_extra_kwargs = {}
