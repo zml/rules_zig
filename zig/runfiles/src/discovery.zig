@@ -39,9 +39,9 @@ pub const DiscoverOptions = if (builtin.zig_version.major == 0 and builtin.zig_v
         /// Used for IO operations during discovery.
         io: std.Io,
         /// EnvironMap
-        argv: std.process.Args,
+        argv: ?std.process.Args = null,
         /// EnvironMap
-        environ_map: *std.process.Environ.Map,
+        environ_map: ?*std.process.Environ.Map = null,
         /// User override for the `RUNFILES_MANIFEST_FILE` variable.
         manifest: ?[]const u8 = null,
         /// User override for the `RUNFILES_DIRECTORY` variable.
@@ -162,16 +162,22 @@ pub fn discoverRunfiles_016(options: DiscoverOptions) DiscoverError!?Location {
     if (options.directory) |value|
         return .{ .directory = try options.allocator.dupe(u8, value) };
 
-    if (options.environ_map.get(runfiles_manifest_var_name)) |value|
-        return .{ .manifest = value };
+    if (options.environ_map) |environ_map| {
+        if (environ_map.get(runfiles_manifest_var_name)) |value|
+            return .{ .manifest = value };
+        if (environ_map.get(runfiles_directory_var_name)) |value|
+            return .{ .directory = value };
+    }
 
-    if (options.environ_map.get(runfiles_directory_var_name)) |value|
-        return .{ .directory = value };
-
-    var iter = try options.argv.iterateAllocator(options.allocator);
-    defer iter.deinit();
-    const argv0 = options.argv0 orelse iter.next() orelse
-        return error.MissingArg0;
+    var iter: ?std.process.Args.Iterator = null;
+    defer if (iter) |*it| it.deinit();
+    const argv0 = options.argv0 orelse blk: {
+        if (options.argv) |argv| {
+            iter = try argv.iterateAllocator(options.allocator);
+            break :blk iter.?.next();
+        }
+        break :blk null;
+    } orelse return error.MissingArg0;
 
     var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
 
