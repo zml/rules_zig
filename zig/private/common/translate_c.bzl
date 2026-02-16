@@ -1,35 +1,41 @@
 """Handle translate-c pass."""
 
 load("@apple_support//lib:apple_support.bzl", "apple_support")
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_cc//cc:action_names.bzl", "ACTION_NAMES")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-
-# load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 load("//zig/private:cc_helper.bzl", "find_cc_toolchain")
 load("//zig/private/providers:zig_module_info.bzl", "ZigModuleInfo", "zig_module_info")
 
+_DEFAULT_SYSROOT_INCLUDE_DIRS = [
+    paths.join("usr", "include"),
+]
+
+_APPLE_DEFAULT_TOOLCHAIN_INCLUDE_DIRS = _DEFAULT_SYSROOT_INCLUDE_DIRS + [
+    paths.join("usr", "lib", "clang", str(version), "include")
+    for version in range(15, 22)
+]
+
 def _extract_sysroot(command_line):
-    rewritten = []
     sysroot = None
     waiting_for_sysroot = False
 
     for arg in command_line:
         if waiting_for_sysroot:
-            sysroot = arg
-            waiting_for_sysroot = False
+            return arg
         elif arg == "-isysroot":
             waiting_for_sysroot = True
         elif arg.startswith("-isysroot"):
             # rare compact form: -isysroot/path
-            sysroot = arg[len("-isysroot"):]
-        else:
-            rewritten.append(arg)
+            return arg[len("-isysroot"):]
+        elif arg.startswith("--sysroot="):
+            return arg[len("--sysroot="):]
 
     if waiting_for_sysroot:
         fail("-isysroot without following path in command_line")
 
-    return rewritten, sysroot
+    return sysroot
 
 def _include_path_for_file(file):
     if (file.is_source == False):
@@ -40,6 +46,9 @@ def _include_path_for_file(file):
     if (file.owner.repo_name):
         return file.path.removeprefix(file.owner.workspace_root + "/")
     return file.path
+
+def _is_local_config_apple_cc(cc_toolchain):
+    return cc_toolchain and "local_config_apple_cc" in cc_toolchain.compiler_executable
 
 def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args, cc_infos, output_prefix = ""):
     """Handle translate-c build action.
@@ -71,6 +80,10 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
     # This allows including to extra headers provided directly by the toolchain.
     # E.g. <os/log.h> on macOS.
     cc_toolchain, cc_feature_configuration = find_cc_toolchain(ctx, mandatory = False)
+
+    # Detect if the toolchain is the local apple cc toolchain since it requires
+    # special handling to get the builtin headers included.
+    is_local_apple_cc = _is_local_config_apple_cc(cc_toolchain)
     if cc_toolchain:
         toolchain_defines_hdr = ctx.actions.declare_file("{}.toolchain_defines_hdr.c".format(ctx.label.name))
         ctx.actions.write(toolchain_defines_hdr, "")
@@ -99,6 +112,14 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
     args = ctx.actions.args()
     args.add(hdr)
 
+    args.add_all([
+        "--emulate=clang",
+        "-undef",
+        "-nobuiltininc",
+        "-fmodule-libs",
+        "-D__building_module(x)=0",
+    ])
+
     if cc_toolchain:
         c_compile_variables = cc_common.create_compile_variables(
             feature_configuration = cc_feature_configuration,
@@ -112,23 +133,28 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
         )
 
         transitive_inputs.append(cc_toolchain.all_files)
+        args.add_all(command_line)
         args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
 
-        rewritten, sysroot = _extract_sysroot(command_line)
+        # If the toolchain specifies a sysroot, add the sysroot's /usr/include as an
+        # include path since that's where the toolchain's builtin headers are expected to be.
+        sysroot = _extract_sysroot(command_line)
         if sysroot != None or sysroot != "/dev/null":
-            rewritten.append("--sysroot=%s" % sysroot)
-        args.add_all(rewritten)
+            args.add("-isystem", paths.join(sysroot, "usr", "include"))
 
-        # args.add_all(command_line)
-
-    args.add_all([
-        "--emulate=clang",
-        "-undef",
-        "-nobuiltininc",
-        "-nostdlibinc",
-        "-fmodule-libs",
-        "-D__building_module(x)=0",
-    ])
+        # If using the local apple cc toolchain, also include the default toolchain's
+        # builtin headers since the local apple cc toolchain doesn't include them by default.
+        if is_local_apple_cc:
+            args.add_all(
+                _APPLE_DEFAULT_TOOLCHAIN_INCLUDE_DIRS,
+                before_each = "-isystem",
+                format_each = paths.join(
+                    apple_support.path_placeholders.xcode(),
+                    "Toolchains",
+                    "XcodeDefault.xctoolchain",
+                    "",
+                ) + "%s",
+            )
 
     args.add_all(compilation_context.defines, format_each = "-D%s")
     args.add("-I.")
@@ -146,50 +172,37 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
     zig_out = ctx.actions.declare_file("{}{}_c.zig".format(output_prefix, ctx.label.name))
     args.add("-o", zig_out)
 
-    if apple_support.target_os_from_rule_ctx(ctx, fail_on_missing_constraint = False):
-        apple_support.run(
+    actions_run = ctx.actions.run
+    actions_run_extra_kwargs = {}
+    if is_local_apple_cc:
+        actions_run = apple_support.run
+        actions_run_extra_kwargs = dict(
             actions = ctx.actions,
-            executable = ctx.executable._translate_c,
-            inputs = depset(
-                direct = inputs,
-                transitive = transitive_inputs,
-            ),
-            outputs = [zig_out],
-            arguments = [args],
-            mnemonic = "ZigTranslateC",
-            progress_message = "zig translate-c %{label}",
-            execution_requirements = {tag: "" for tag in ctx.attr.tags},
-            xcode_path_resolve_level = apple_support.xcode_path_resolve_level.args,
-            env = {
-                "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
-                "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
-                "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
-            },
-            tools = zigtoolchaininfo.zig_files,
-            toolchain = "//zig:toolchain_type",
             apple_fragment = ctx.fragments.apple,
             xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig],
+            xcode_path_resolve_level = apple_support.xcode_path_resolve_level.args,
         )
-    else:
-        ctx.actions.run(
-            inputs = depset(
-                direct = inputs,
-                transitive = transitive_inputs,
-            ),
-            executable = ctx.executable._translate_c,
-            outputs = [zig_out],
-            arguments = [args],
-            mnemonic = "ZigTranslateC",
-            progress_message = "zig translate-c %{label}",
-            execution_requirements = {tag: "" for tag in ctx.attr.tags},
-            env = {
-                "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
-                "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
-                "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
-            },
-            tools = zigtoolchaininfo.zig_files,
-            toolchain = "//zig:toolchain_type",
-        )
+
+    actions_run(
+        inputs = depset(
+            direct = inputs,
+            transitive = transitive_inputs,
+        ),
+        executable = ctx.executable._translate_c,
+        outputs = [zig_out],
+        arguments = [args],
+        mnemonic = "ZigTranslateC",
+        progress_message = "zig translate-c %{label}",
+        execution_requirements = {tag: "" for tag in ctx.attr.tags},
+        env = {
+            "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+            "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
+            "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+        },
+        tools = zigtoolchaininfo.zig_files,
+        toolchain = "//zig:toolchain_type",
+        **actions_run_extra_kwargs
+    )
 
     # Only forward the linking context since compilation_context is now handled
     # by Zig through the generated _c.zig.

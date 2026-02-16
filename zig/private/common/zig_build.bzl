@@ -1,6 +1,5 @@
 """Common implementation of the zig_binary|library|test rules."""
 
-load("@apple_support//lib:apple_support.bzl", "apple_support")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@build_bazel_rules_android//:cc_common_link.bzl", "cc_common_link")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "use_cc_toolchain")
@@ -137,7 +136,7 @@ Use this at your own risk of hitting undefined behaviors.
         doc = "Zig build settings.",
         providers = [ZigSettingsInfo],
     ),
-} | BAZEL_BUILTIN_ATTRS | apple_support.platform_constraint_attrs()
+} | BAZEL_BUILTIN_ATTRS
 
 COMMON_LIBRARY_ATTRS = {}
 
