@@ -79,7 +79,11 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
     # If there is a CC toolchain, add builtin directories.
     # This allows including to extra headers provided directly by the toolchain.
     # E.g. <os/log.h> on macOS.
-    cc_toolchain, cc_feature_configuration = find_cc_toolchain(ctx, mandatory = False)
+    cc_toolchain, cc_feature_configuration = find_cc_toolchain(
+        ctx,
+        mandatory = False,
+        disabled_features = ["thin_lto"],
+    )
 
     # Detect if the toolchain is the local apple cc toolchain since it requires
     # special handling to get the builtin headers included.
