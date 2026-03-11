@@ -2,9 +2,9 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@build_bazel_rules_android//:cc_common_link.bzl", "cc_common_link")
-load("@rules_cc//cc/common:cc_helper.bzl", "cc_helper")
-load("@rules_cc//cc:defs.bzl", "cc_common", "CcInfo")
+load("@rules_cc//cc:defs.bzl", "CcInfo", "cc_common")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "use_cc_toolchain")
+load("@rules_cc//cc/common:cc_helper.bzl", "cc_helper")
 load("//zig/private:cc_helper.bzl", "find_cc_toolchain", "need_translate_c")
 load(
     "//zig/private/common:bazel_builtin.bzl",
@@ -145,17 +145,6 @@ SHARED_LIBRARY_ATTRS = {
         doc = "",
         mandatory = False,
     ),
-    "_translate_c": attr.label(
-        default = Label(":translate-c"),
-        cfg = "exec",
-        executable = True,
-    ),
-    "_c_helpers": attr.label(
-        default = Label(":helpers"),
-    ),
-    "_c_builtins": attr.label(
-        default = Label(":c_builtins"),
-    ),
 }
 
 BINARY_ATTRS = {
@@ -166,17 +155,6 @@ Subject to location expansion.
 NOTE: The environment variables are not set when you run the target outside of Bazel (for example, by manually executing the binary in bazel-bin/).
         """,
         mandatory = False,
-    ),
-    "_translate_c": attr.label(
-        default = Label(":translate-c"),
-        cfg = "exec",
-        executable = True,
-    ),
-    "_c_helpers": attr.label(
-        default = Label(":helpers"),
-    ),
-    "_c_builtins": attr.label(
-        default = Label(":c_builtins"),
     ),
 }
 
@@ -198,17 +176,6 @@ Environment variables to inherit from external environment when executed by `baz
         allow_single_file = ZIG_SOURCE_EXTENSIONS,
         doc = "Optional Zig file to specify a custom test runner",
         mandatory = False,
-    ),
-    "_translate_c": attr.label(
-        default = Label(":translate-c"),
-        cfg = "exec",
-        executable = True,
-    ),
-    "_c_helpers": attr.label(
-        default = Label(":helpers"),
-    ),
-    "_c_builtins": attr.label(
-        default = Label(":c_builtins"),
     ),
 }
 

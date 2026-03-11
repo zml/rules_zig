@@ -115,8 +115,8 @@ def _zig_transition_impl(settings, attr):
         result["//zig/settings:threaded"] = attr.threaded
     if attr.zigopt:
         result["//zig/settings:zigopt"] = attr.zigopt
-    if attr.no_translate_c != -1:
-        result["//zig/settings:no_translate_c"] = attr.no_translate_c == 1
+    if attr.translate_c != -1:
+        result["//zig/settings:translate_c"] = attr.translate_c == 1
     return result
 
 _zig_transition = transition(
@@ -129,7 +129,7 @@ _zig_transition = transition(
         "//zig/settings:mode",
         "//zig/settings:threaded",
         "//zig/settings:zigopt",
-        "//zig/settings:no_translate_c",
+        "//zig/settings:translate_c",
     ],
     outputs = [
         "//command_line_option:extra_toolchains",
@@ -139,7 +139,7 @@ _zig_transition = transition(
         "//zig/settings:mode",
         "//zig/settings:threaded",
         "//zig/settings:zigopt",
-        "//zig/settings:no_translate_c",
+        "//zig/settings:translate_c",
     ],
 )
 
@@ -185,7 +185,7 @@ def _make_attrs(*, executable):
             mandatory = False,
             values = THREADED_VALUES,
         ),
-        "no_translate_c": attr.int(
+        "translate_c": attr.int(
             doc = "If true, disables translation of C headers for C dependencies.",
             mandatory = False,
             values = [-1, 0, 1],
@@ -250,14 +250,10 @@ def _make_zig_configure_rule(*, executable, test):
                 is_executable = True,
             )
 
-            # TODO[AH] Add a data attribute for executable rules.
-            runfiles = ctx.runfiles(files = [executable, actual_executable])
-            runfiles = runfiles.merge(actual[DefaultInfo].default_runfiles)
-
             providers.append(DefaultInfo(
                 executable = executable,
                 files = depset(direct = [executable]),
-                runfiles = runfiles,
+                runfiles = actual[DefaultInfo].default_runfiles,
             ))
         else:
             providers.append(actual[DefaultInfo])
