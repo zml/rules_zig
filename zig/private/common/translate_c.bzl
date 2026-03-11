@@ -142,7 +142,7 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
         # If the toolchain specifies a sysroot, add the sysroot's /usr/include as an
         # include path since that's where the toolchain's builtin headers are expected to be.
         sysroot = _extract_sysroot(command_line)
-        if sysroot != None or sysroot != "/dev/null":
+        if sysroot != None and sysroot != "/dev/null":
             args.add("-isystem", paths.join(sysroot, "usr", "include"))
 
         # If using the local apple cc toolchain, also include the default toolchain's
