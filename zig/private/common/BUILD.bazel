@@ -10,31 +10,6 @@ genrule(
     visibility = ["//zig:__subpackages__"],
 )
 
-alias(
-    name = "translate-c",
-    actual = select({
-        "//zig/settings:translate_c_enabled": "@@//translate-c:translate-c",
-        "//conditions:default": ":dummy",
-    }),
-    visibility = ["//visibility:public"],
-)
-
-alias(
-    name = "helpers",
-    actual = select({
-        "//conditions:default": "@@//translate-c:helpers",
-    }),
-    visibility = ["//visibility:public"],
-)
-
-alias(
-    name = "c_builtins",
-    actual = select({
-        "//conditions:default": "@@//translate-c:c_builtins",
-    }),
-    visibility = ["//visibility:public"],
-)
-
 bzl_library(
     name = "zig_cache",
     srcs = ["zig_cache.bzl"],

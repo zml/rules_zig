@@ -72,7 +72,7 @@ ATTRS = {
     "translate_c": attr.label(
         doc = "The translate-c label.",
         mandatory = False,
-        cfg = _zig_no_translate_c_transition,
+        cfg = "exec",
     ),
 }
 
@@ -166,7 +166,7 @@ def _zig_toolchain_impl(ctx):
         zig_files = zig_files,
         zig_version = zig_version,
         zig_cache = zig_cache,
-        translate_c = ctx.attr.translate_c and ctx.attr.translate_c[0] or None,
+        translate_c = ctx.attr.translate_c,
     )
 
     # Export all the providers inside our ToolchainInfo
@@ -186,6 +186,7 @@ def _zig_toolchain_impl(ctx):
 
 zig_toolchain = rule(
     implementation = _zig_toolchain_impl,
+    cfg = _zig_no_translate_c_transition,
     attrs = ATTRS,
     doc = DOC,
 )

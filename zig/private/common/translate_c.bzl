@@ -17,6 +17,36 @@ _APPLE_DEFAULT_TOOLCHAIN_INCLUDE_DIRS = _DEFAULT_SYSROOT_INCLUDE_DIRS + [
     for version in range(15, 22)
 ]
 
+_TRANSLATED_ARGS = {
+    "-internal-isystem": "-isystem",
+}
+
+_FILTERED_ARGS = [
+    "-Xclang",
+]
+
+def _sanitize_commandline(args):
+    ret = []
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in _TRANSLATED_ARGS:
+            ret.append(_TRANSLATED_ARGS[arg])
+            continue
+        elif arg in _FILTERED_ARGS:
+            continue
+        for prefix, replacement in _TRANSLATED_ARGS.items():
+            if arg.startswith(prefix):
+                ret.append(replacement + arg[len(prefix):])
+                continue
+        for prefix in _FILTERED_ARGS:
+            if arg.startswith(prefix):
+                continue
+        ret.append(arg)
+    return ret
+
 def _extract_sysroot(command_line):
     sysroot = None
     waiting_for_sysroot = False
@@ -148,7 +178,7 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
             )
 
             transitive_inputs.append(cc_toolchain.all_files)
-            args.add_all(command_line)
+            args.add_all(_sanitize_commandline(command_line))
             args.add_all(cc_toolchain.built_in_include_directories, before_each = "-isystem")
 
             # If the toolchain specifies a sysroot, add the sysroot's /usr/include as an
