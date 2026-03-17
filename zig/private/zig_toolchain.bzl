@@ -159,6 +159,7 @@ def _zig_toolchain_impl(ctx):
     )
 
     zigtoolchaininfo = ZigToolchainInfo(
+        zig_exe = ctx.attr.zig_exe,
         zig_exe_path = zig_exe_path,
         zig_exe_rpath = zig_exe_rpath,
         zig_lib_path = zig_lib_path,

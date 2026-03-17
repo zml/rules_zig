@@ -5,6 +5,7 @@ Information about how to invoke the Zig executable.
 """
 
 FIELDS = {
+    "zig_exe": "Label to the zig executable",
     "zig_exe_path": "Path to the Zig executable for the target platform.",
     "zig_exe_rpath": """\
 Rlocation path to the Zig executable for the target platform.
