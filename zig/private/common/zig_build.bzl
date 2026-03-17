@@ -555,12 +555,11 @@ buildozer 'move cdeps deps *' {target}
     elif kind == "zig_test":
         if ctx.attr.emit_bin and use_cc_common_link:
             bc = ctx.actions.declare_file(ctx.label.name + ".bc")
-            zig_build_outputs.append(bc)
             test_args = ctx.actions.args()
             test_args.add("-fno-emit-bin")
             test_args.add(bc, format = "-femit-llvm-bc=%s")
             ctx.actions.run(
-                outputs = zig_build_outputs,
+                outputs = [bc],
                 inputs = inputs,
                 executable = zigtoolchaininfo.zig_exe_path,
                 arguments = ["test", "--test-no-exec", global_args, args, test_args],
