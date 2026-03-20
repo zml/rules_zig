@@ -32,7 +32,7 @@ pub fn init_pre_016(allocator: std.mem.Allocator, path: []const u8) InitError!Di
 }
 
 pub fn init_016(allocator: std.mem.Allocator, io: std.Io, path: []const u8) InitError!Directory {
-    const absolute = try std.Io.Dir.realPathFileAbsoluteAlloc(io, path, allocator);
+    const absolute = try std.Io.Dir.cwd().realPathFileAlloc(io, path, allocator);
     errdefer allocator.free(absolute);
     // TODO[AH] Implement OS specific normalization, e.g. Windows lower-case.
     return .{ .path = absolute };
