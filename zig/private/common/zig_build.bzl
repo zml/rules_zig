@@ -552,6 +552,18 @@ buildozer 'move cdeps deps *' {target}
                 progress_message = "zig build-exe %{label}",
                 **zig_build_kwargs
             )
+    elif kind == "zig_asm":
+        args.add(default_output, format = "-femit-asm=%s")
+        args.add("-fno-emit-bin")
+        ctx.actions.run(
+            outputs = zig_build_outputs,
+            inputs = inputs,
+            executable = zigtoolchaininfo.zig_exe_path,
+            arguments = ["build-obj", global_args, args],
+            mnemonic = "ZigBuildAsm",
+            progress_message = "zig build-obj %{label}",
+            **zig_build_kwargs
+        )
     elif kind == "zig_test":
         if ctx.attr.emit_bin and use_cc_common_link:
             bc = ctx.actions.declare_file(ctx.label.name + ".bc")
