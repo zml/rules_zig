@@ -252,7 +252,7 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
             execution_requirements = {tag: "" for tag in ctx.attr.tags},
             env = {
                 "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
-                "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
+                "ZIG_LIB_DIR": zigtoolchaininfo.zig_h.dirname,
                 "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
             },
             tools = zigtoolchaininfo.zig_files,

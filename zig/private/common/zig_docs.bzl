@@ -190,7 +190,7 @@ The `cdeps` attribute of `zig_build` is deprecated, use `deps` instead.
     ctx.actions.run(
         outputs = outputs,
         inputs = inputs,
-        executable = zigtoolchaininfo.zig_exe_path,
+        executable = zigtoolchaininfo.zig_exe_file,
         tools = zigtoolchaininfo.zig_files,
         arguments = arguments,
         mnemonic = mnemonic,
