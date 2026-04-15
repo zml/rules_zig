@@ -74,10 +74,12 @@ ATTRS = {
 
 def _validate_zig_version(ctx, *, zig_exe, zig_lib, zig_version):
     output = ctx.actions.declare_file(ctx.label.name + ".version_validation")
+    args = ctx.actions.args()
+    args.add_all([zig_exe, zig_version, output])
     ctx.actions.run_shell(
         outputs = [output],
         tools = [zig_exe, zig_lib],
-        arguments = [zig_exe.path, zig_version, output.path],
+        arguments = [args],
         command = "\n".join([
             'actual_version="$($1 version)"',
             "if [[ $actual_version != $2 ]]; then",
