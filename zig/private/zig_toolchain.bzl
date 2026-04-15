@@ -130,7 +130,7 @@ def _zig_toolchain_impl(ctx):
     )
 
     zigtoolchaininfo = ZigToolchainInfo(
-        zig_exe_file = zig_exe,
+        zig_exe = zig_exe,
         zig_h = zig_h,
         zig_lib = zig_lib,
         zig_version = zig_version,
