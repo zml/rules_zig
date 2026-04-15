@@ -462,7 +462,7 @@ buildozer 'move cdeps deps *' {target}
 
     zig_build_kwargs = dict(
         execution_requirements = {tag: "" for tag in ctx.attr.tags},
-        tools = zigtoolchaininfo.zig_files,
+        tools = [zigtoolchaininfo.zig_exe_file, zigtoolchaininfo.zig_lib],
         toolchain = "//zig:toolchain_type",
     )
 

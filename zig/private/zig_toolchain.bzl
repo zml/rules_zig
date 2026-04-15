@@ -52,10 +52,10 @@ ATTRS = {
         mandatory = True,
         allow_single_file = True,
     ),
-    "zig_lib": attr.label_list(
-        doc = "Files of a hermetically downloaded Zig library for the target platform.",
+    "zig_lib": attr.label(
+        doc = "A source directory containing the hermetic Zig library for the target platform.",
         mandatory = True,
-        allow_files = True,
+        allow_single_file = True,
     ),
     "zig_version": attr.string(
         doc = "The Zig toolchain's version.",
@@ -72,11 +72,11 @@ ATTRS = {
     ),
 }
 
-def _validate_zig_version(ctx, *, zig_exe, zig_files, zig_version):
+def _validate_zig_version(ctx, *, zig_exe, zig_lib, zig_version):
     output = ctx.actions.declare_file(ctx.label.name + ".version_validation")
     ctx.actions.run_shell(
         outputs = [output],
-        tools = zig_files,
+        tools = [zig_exe, zig_lib],
         arguments = [zig_exe.path, zig_version, output.path],
         command = "\n".join([
             'actual_version="$($1 version)"',
@@ -100,25 +100,21 @@ def _single_file(ctx, attr_name):
 def _zig_toolchain_impl(ctx):
     zig_exe = _single_file(ctx, "zig_exe")
     zig_h = _single_file(ctx, "zig_h")
-    zig_files = [zig_exe, zig_h] + [
-        file
-        for file in ctx.files.zig_lib
-        if file.path != zig_h.path
-    ]
+    zig_lib = _single_file(ctx, "zig_lib")
     zig_version = ctx.attr.zig_version
     zig_cache = ctx.attr.zig_cache
 
     validation = _validate_zig_version(
         ctx,
         zig_exe = zig_exe,
-        zig_files = zig_files,
+        zig_lib = zig_lib,
         zig_version = zig_version,
     )
 
     # Validation actions of transitive dependencies do not seem to be picked up
     # by Bazel. So, we need to make the validation output an input of Zig SDK
     # using actions to ensure that it takes place.
-    zig_files.append(validation)
+    tool_files = [zig_exe, zig_lib, validation]
 
     # Make the $(tool_BIN) variable available in places like genrules.
     # See https://docs.bazel.build/versions/main/be/make-variables.html#custom_variables
@@ -127,14 +123,14 @@ def _zig_toolchain_impl(ctx):
     })
 
     default = DefaultInfo(
-        files = depset(direct = zig_files),
-        runfiles = ctx.runfiles(files = zig_files),
+        files = depset(direct = tool_files),
+        runfiles = ctx.runfiles(files = tool_files),
     )
 
     zigtoolchaininfo = ZigToolchainInfo(
         zig_exe_file = zig_exe,
         zig_h = zig_h,
-        zig_files = zig_files,
+        zig_lib = zig_lib,
         zig_version = zig_version,
         zig_cache = zig_cache,
         translate_c = ctx.attr.translate_c,

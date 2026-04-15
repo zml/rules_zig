@@ -93,7 +93,7 @@ def _zig_toolchain_header_impl(ctx):
     cc_info = CcInfo(
         compilation_context = cc_common.create_compilation_context(
             headers = depset(direct = [zigtoolchaininfo.zig_h]),
-            includes = depset(direct = [zigtoolchaininfo.zig_h.dirname]),
+            includes = depset(direct = [zigtoolchaininfo.zig_lib.path]),
             defines = depset(direct = defines),
         ),
     )

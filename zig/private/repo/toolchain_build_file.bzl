@@ -10,7 +10,7 @@ zig_toolchain(
     name = "zig_toolchain_no_translate_c",
     zig_exe = {zig_exe},
     zig_h = "lib/zig.h",
-    zig_lib = glob(["lib/**"]),
+    zig_lib = "lib",
     zig_version = {zig_version},
     zig_cache = {zig_cache},
 )
@@ -19,7 +19,7 @@ zig_toolchain(
     name = "zig_toolchain",
     zig_exe = {zig_exe},
     zig_h = "lib/zig.h",
-    zig_lib = glob(["lib/**"]),
+    zig_lib = "lib",
     zig_version = {zig_version},
     zig_cache = {zig_cache},
     translate_c = {translate_c},

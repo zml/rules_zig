@@ -191,7 +191,7 @@ The `cdeps` attribute of `zig_build` is deprecated, use `deps` instead.
         outputs = outputs,
         inputs = inputs,
         executable = zigtoolchaininfo.zig_exe_file,
-        tools = zigtoolchaininfo.zig_files,
+        tools = [zigtoolchaininfo.zig_exe_file, zigtoolchaininfo.zig_lib],
         arguments = arguments,
         mnemonic = mnemonic,
         progress_message = progress_message,

@@ -104,6 +104,5 @@ See https://bazel.build/extending/toolchains#defining-toolchains.
 | <a id="zig_toolchain-zig_cache"></a>zig_cache |  The Zig cache directory prefix. Used for both the global and local cache.   | String | required |  |
 | <a id="zig_toolchain-zig_exe"></a>zig_exe |  A hermetically downloaded Zig executable for the target platform.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="zig_toolchain-zig_h"></a>zig_h |  The Zig header at the root of the Zig library directory.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="zig_toolchain-zig_lib"></a>zig_lib |  Files of a hermetically downloaded Zig library for the target platform.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="zig_toolchain-zig_lib"></a>zig_lib |  A source directory containing the hermetic Zig library for the target platform.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="zig_toolchain-zig_version"></a>zig_version |  The Zig toolchain's version.   | String | required |  |
-
