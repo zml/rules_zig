@@ -45,6 +45,7 @@ ATTRS = {
         doc = "A hermetically downloaded Zig executable for the target platform.",
         mandatory = True,
         allow_single_file = True,
+        executable = True,
         cfg = "exec",
     ),
     "zig_h": attr.label(
@@ -93,16 +94,10 @@ def _validate_zig_version(ctx, *, zig_exe, zig_lib, zig_version):
     )
     return output
 
-def _single_file(ctx, attr_name):
-    files = getattr(ctx.attr, attr_name)[DefaultInfo].files.to_list()
-    if len(files) != 1:
-        fail("Attribute '{}' must provide exactly one file or directory.".format(attr_name))
-    return files[0]
-
 def _zig_toolchain_impl(ctx):
-    zig_exe = _single_file(ctx, "zig_exe")
-    zig_h = _single_file(ctx, "zig_h")
-    zig_lib = _single_file(ctx, "zig_lib")
+    zig_exe = ctx.executable.zig_exe
+    zig_h = ctx.file.zig_h
+    zig_lib = ctx.file.zig_lib
     zig_version = ctx.attr.zig_version
     zig_cache = ctx.attr.zig_cache
 
