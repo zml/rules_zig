@@ -258,7 +258,6 @@ def zig_build_impl(ctx, *, kind):
     outputs = []
     output_groups = {}
 
-
     direct_inputs = []
     transitive_inputs = []
 
@@ -463,7 +462,7 @@ buildozer 'move cdeps deps *' {target}
 
     zig_build_kwargs = dict(
         execution_requirements = {tag: "" for tag in ctx.attr.tags},
-        tools = zigtoolchaininfo.zig_files,
+        tools = [zigtoolchaininfo.zig_exe, zigtoolchaininfo.zig_lib],
         toolchain = "//zig:toolchain_type",
     )
 
@@ -477,7 +476,6 @@ buildozer 'move cdeps deps *' {target}
 
     if not use_cc_common_link and kind != "zig_static_library":
         args.add_all(linkopts)
-
 
     zig_build_outputs = []
     if ctx.attr.emit_bin:
@@ -506,7 +504,7 @@ buildozer 'move cdeps deps *' {target}
             ctx.actions.run(
                 outputs = zig_build_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
+                executable = zigtoolchaininfo.zig_exe,
                 arguments = ["build-lib", global_args, args],
                 mnemonic = "ZigBuildLib",
                 progress_message = "zig build-lib %{label}",
@@ -546,12 +544,24 @@ buildozer 'move cdeps deps *' {target}
             ctx.actions.run(
                 outputs = zig_build_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
+                executable = zigtoolchaininfo.zig_exe,
                 arguments = ["build-exe", global_args, args],
                 mnemonic = "ZigBuildExe",
                 progress_message = "zig build-exe %{label}",
                 **zig_build_kwargs
             )
+    elif kind == "zig_asm":
+        args.add(default_output, format = "-femit-asm=%s")
+        args.add("-fno-emit-bin")
+        ctx.actions.run(
+            outputs = zig_build_outputs,
+            inputs = inputs,
+            executable = zigtoolchaininfo.zig_exe,
+            arguments = ["build-obj", global_args, args],
+            mnemonic = "ZigBuildAsm",
+            progress_message = "zig build-obj %{label}",
+            **zig_build_kwargs
+        )
     elif kind == "zig_test":
         if ctx.attr.emit_bin and use_cc_common_link:
             bc = ctx.actions.declare_file(ctx.label.name + ".bc")
@@ -561,7 +571,7 @@ buildozer 'move cdeps deps *' {target}
             ctx.actions.run(
                 outputs = [bc],
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
+                executable = zigtoolchaininfo.zig_exe,
                 arguments = ["test", "--test-no-exec", global_args, args, test_args],
                 mnemonic = "ZigBuildTest",
                 progress_message = "zig test %{label}",
@@ -579,7 +589,7 @@ buildozer 'move cdeps deps *' {target}
             ctx.actions.run(
                 outputs = [static_lib],
                 inputs = [bc],
-                executable = zigtoolchaininfo.zig_exe_path,
+                executable = zigtoolchaininfo.zig_exe,
                 arguments = ["build-lib", global_args, lib_args],
                 mnemonic = "ZigBuildLib",
                 progress_message = "zig build-lib %{label}",
@@ -620,7 +630,7 @@ buildozer 'move cdeps deps *' {target}
             ctx.actions.run(
                 outputs = zig_build_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
+                executable = zigtoolchaininfo.zig_exe,
                 arguments = ["test", "--test-no-exec", global_args, args],
                 mnemonic = "ZigBuildTest",
                 progress_message = "zig test %{label}",
@@ -634,7 +644,7 @@ buildozer 'move cdeps deps *' {target}
         ctx.actions.run(
             outputs = zig_build_outputs,
             inputs = inputs,
-            executable = zigtoolchaininfo.zig_exe_path,
+            executable = zigtoolchaininfo.zig_exe,
             arguments = ["build-lib", global_args, args],
             mnemonic = "ZigBuildStaticLib",
             progress_message = "zig build-lib %{label}",
@@ -658,7 +668,7 @@ buildozer 'move cdeps deps *' {target}
             ctx.actions.run(
                 outputs = [static_lib],
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
+                executable = zigtoolchaininfo.zig_exe,
                 arguments = ["build-lib", global_args, args],
                 mnemonic = "ZigBuildLib",
                 progress_message = "zig build-lib %{label}",
@@ -703,7 +713,7 @@ buildozer 'move cdeps deps *' {target}
             ctx.actions.run(
                 outputs = zig_build_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
+                executable = zigtoolchaininfo.zig_exe,
                 arguments = ["build-lib", "-dynamic", global_args, args],
                 mnemonic = "ZigBuildSharedLib",
                 progress_message = "zig build-lib -dynamic %{label}",
