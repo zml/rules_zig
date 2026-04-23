@@ -203,15 +203,35 @@ def zig_translate_c(*, ctx, name, canonical_name, zigtoolchaininfo, global_args,
 
         args.add_all(compilation_context.defines, format_each = "-D%s")
         args.add("-I.")
-        args.add_all(compilation_context.includes, format_each = "-I%s")
+
+        # Collect all paths that will be emitted as -isystem so we can prevent
+        # the same path from also being emitted as -I (which would cause
+        # duplicate include warnings).
+        system_set = {p: True for p in compilation_context.system_includes.to_list()}
+        # Added in Bazel 7, see https://github.com/bazelbuild/bazel/commit/a6ef0b341a8ffe8ab27e5ace79d8eaae158c422b
+        external_includes = getattr(compilation_context, "external_includes", None)
+        if external_includes:
+            system_set.update({p: True for p in external_includes.to_list()})
+
+        if system_set:
+            args.add_all(
+                [p for p in compilation_context.includes.to_list() if p not in system_set],
+                format_each = "-I%s",
+            )
+        else:
+            args.add_all(compilation_context.includes, format_each = "-I%s")
 
         # Note, Zig does not support `-iquote` as of Zig 0.12.0
         # args.add_all(compilation_context.quote_includes, format_each = "-iquote%s")
-        args.add_all(compilation_context.quote_includes, format_each = "-I%s")
-        args.add_all(compilation_context.system_includes, before_each = "-isystem")
+        if system_set:
+            args.add_all(
+                [p for p in compilation_context.quote_includes.to_list() if p not in system_set],
+                format_each = "-I%s",
+            )
+        else:
+            args.add_all(compilation_context.quote_includes, format_each = "-I%s")
 
-        # Added in Bazel 7, see https://github.com/bazelbuild/bazel/commit/a6ef0b341a8ffe8ab27e5ace79d8eaae158c422b
-        args.add_all(getattr(compilation_context, "external_includes", []), before_each = "-isystem")
+        args.add_all(system_set.keys(), before_each = "-isystem")
         args.add_all(compilation_context.framework_includes, format_each = "-F%s")
 
         zig_out = ctx.actions.declare_file("{}{}_c.zig".format(output_prefix, ctx.label.name))
