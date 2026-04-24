@@ -23,8 +23,10 @@ def zig_cdeps_copts(*, compilation_context, args, transitive_inputs):
 
     if system_set:
         args.add_all(
-            [p for p in compilation_context.includes.to_list() if p not in system_set],
+            compilation_context.includes,
+            map_each = _make_system_filter(system_set),
             format_each = "-I%s",
+            allow_closure = True,
         )
     else:
         args.add_all(compilation_context.includes, format_each = "-I%s")
@@ -33,13 +35,17 @@ def zig_cdeps_copts(*, compilation_context, args, transitive_inputs):
     # args.add_all(compilation_context.quote_includes, format_each = "-iquote%s")
     if system_set:
         args.add_all(
-            [p for p in compilation_context.quote_includes.to_list() if p not in system_set],
+            compilation_context.quote_includes,
+            map_each = _make_system_filter(system_set),
             format_each = "-I%s",
+            allow_closure = True,
         )
     else:
         args.add_all(compilation_context.quote_includes, format_each = "-I%s")
 
-    args.add_all(system_set.keys(), before_each = "-isystem")
+    args.add_all(compilation_context.system_includes, before_each = "-isystem")
+    if external_includes:
+        args.add_all(external_includes, before_each = "-isystem")
     args.add_all(compilation_context.framework_includes, format_each = "-F%s")
 
     transitive_inputs.append(compilation_context.headers)
@@ -104,6 +110,16 @@ def zig_cdeps_linker_inputs(*, linking_context, solib_parents, os, inputs, args,
         before_each = "-rpath",
         uniquify = True,
     )
+
+def _make_system_filter(system_set):
+    """Returns a map_each callback that filters out paths present in system_set."""
+
+    def _filter(path):
+        if path in system_set:
+            return None
+        return path
+
+    return _filter
 
 def _lib_flags(arg):
     (file, dynamic) = arg
