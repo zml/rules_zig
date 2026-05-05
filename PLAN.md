@@ -192,3 +192,10 @@ Goal: add an optional Bazel persistent worker for Zig compile actions so Zig can
   - `bazel build //zig/tests/simple-library:library --@zig_toolchains//:version=0.15.2 --verbose_failures`
   - `bazel build //zig/tests/simple-library:library --@zig_toolchains//:version=0.15.2 --zig_workers=true --strategy=ZigCompile=worker,local --verbose_failures` fails as expected with `Zig persistent workers require Zig 0.16.0 or newer; got 0.15.2`
   - `bazel test //zig/tests/integration_tests:bzlmod_test_bazel_.bazelversion --test_output=errors --verbose_failures`
+- Worker sandboxing cache behavior updated: when cwd matches `<output_base>/bazel-workers/<worker-id>/<execroot-name>`, the worker writes cache to `<output_base>/execroot/<execroot-name>/bazel-out/rules_zig_worker_cache/<zig_version>` instead of sandbox-local `bazel-out`.
+- Worker sandboxing cache verification passed:
+  - `bazel test //zig/private/worker_tests:worker_protocol_test --test_output=errors --verbose_failures`
+  - `bazel build //zig/tests/simple-binary:binary --@rules_zig//zig/settings:zigopt=-lc --zig_workers=true --strategy=ZigCompile=worker,local --worker_sandboxing --worker_verbose --sandbox_debug --worker_quit_after_build --verbose_failures`
+  - Real sandboxed worker wrote 836 files under execroot `bazel-out/rules_zig_worker_cache/0.16.0` and 0 under worker sandbox `bazel-out/rules_zig_worker_cache/0.16.0`.
+  - A second sandboxed worker process with `--@rules_zig//zig/settings:zigopt=-lc --@rules_zig//zig/settings:zigopt=-Dcache_probe` executed successfully and dropped elapsed time from ~14.6s to ~5.0s, consistent with shared Zig cache reuse after worker shutdown.
+  - `bazel test //zig/tests:rules_test --test_output=errors --verbose_failures`

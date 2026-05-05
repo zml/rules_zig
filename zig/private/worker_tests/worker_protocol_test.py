@@ -110,6 +110,46 @@ def main() -> int:
     assert (workdir / "bazel-out/rules_zig_worker_cache/test-version/fake-zig-local-cache-entry").is_file()
     assert (workdir / "bazel-out/rules_zig_worker_cache/test-version/fake-zig-global-cache-entry").is_file()
 
+    sandbox_output_base = workdir / "sandbox-output-base"
+    sandbox_workdir = sandbox_output_base / "bazel-workers/worker-1-ZigCompile/_main"
+    sandbox_execroot = sandbox_output_base / "execroot/_main"
+    sandbox_workdir.mkdir(parents=True, exist_ok=True)
+    sandbox_execroot.mkdir(parents=True, exist_ok=True)
+
+    sandbox_log = workdir / "fake-zig-sandbox.log"
+    env["FAKE_ZIG_LOG"] = str(sandbox_log)
+    sandbox_result = subprocess.run(
+        [
+            worker,
+            "--persistent_worker",
+            "--zig-exe",
+            fake_zig,
+            "--zig-version",
+            "test-version",
+            "build-exe",
+        ],
+        input=json.dumps({"arguments": ["--sandboxed"], "requestId": 4}, separators=(",", ":")) + "\n",
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=sandbox_workdir,
+        env=env,
+        check=False,
+    )
+    if sandbox_result.returncode != 0:
+        raise AssertionError(f"sandboxed worker returned {sandbox_result.returncode}: {sandbox_result.stderr}")
+    sandbox_response = json.loads(sandbox_result.stdout)
+    assert sandbox_response["exitCode"] == 0, sandbox_response
+
+    sandbox_invocation = sandbox_log.read_text(encoding="utf-8").strip()
+    shared_cache = sandbox_execroot / "bazel-out/rules_zig_worker_cache/test-version"
+    assert_contains(sandbox_invocation, f"--cache-dir {shared_cache}")
+    assert_contains(sandbox_invocation, f"--global-cache-dir {shared_cache}")
+    assert (shared_cache / "fake-zig-local-cache-entry").is_file()
+    assert not (sandbox_workdir / "bazel-out/rules_zig_worker_cache/test-version/fake-zig-local-cache-entry").exists()
+
+    env["FAKE_ZIG_LOG"] = str(workdir / "fake-zig.log")
+
     param_file = workdir / "oneshot.params"
     param_file.write_text("--oneshot\n", encoding="utf-8")
     oneshot = subprocess.run(

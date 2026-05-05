@@ -60,8 +60,12 @@ fn mainImpl(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const 
 
         var argv: std.ArrayList([]const u8) = .empty;
         defer argv.deinit(arena);
+        var expanded_args: std.ArrayList([]const u8) = .empty;
+        defer expanded_args.deinit(arena);
         try argv.append(arena, options.zig_exe);
-        try appendExpandedArgs(arena, io, &argv, remaining.args);
+        try appendExpandedArgs(arena, io, &expanded_args, remaining.args);
+        try appendFilteredRequestArgs(arena, &argv, expanded_args.items);
+        try appendWorkerCacheArgs(arena, io, &argv, options.zig_version);
         const result = try runZig(arena, io, argv.items);
         if (result.output.len > 0) {
             try writeAll(io, .stderr, result.output);
@@ -162,12 +166,52 @@ fn appendFilteredRequestArgs(allocator: std.mem.Allocator, argv: *std.ArrayList(
 }
 
 fn appendWorkerCacheArgs(allocator: std.mem.Allocator, io: std.Io, argv: *std.ArrayList([]const u8), zig_version: []const u8) !void {
-    const cache = try std.fs.path.join(allocator, &.{ "bazel-out", "rules_zig_worker_cache", zig_version });
+    const cache = try workerCachePath(allocator, io, zig_version);
     try std.Io.Dir.cwd().createDirPath(io, cache);
     try argv.append(allocator, "--cache-dir");
     try argv.append(allocator, cache);
     try argv.append(allocator, "--global-cache-dir");
     try argv.append(allocator, cache);
+}
+
+fn workerCachePath(allocator: std.mem.Allocator, io: std.Io, zig_version: []const u8) ![]u8 {
+    if (try execrootFromWorkerSandbox(allocator, io)) |execroot| {
+        return try std.fs.path.join(allocator, &.{ execroot, "bazel-out", "rules_zig_worker_cache", zig_version });
+    }
+    return try std.fs.path.join(allocator, &.{ "bazel-out", "rules_zig_worker_cache", zig_version });
+}
+
+fn execrootFromWorkerSandbox(allocator: std.mem.Allocator, io: std.Io) !?[]u8 {
+    const cwd_z = try std.process.currentPathAlloc(io, allocator);
+    const cwd = cwd_z[0..cwd_z.len];
+
+    var candidate: []const u8 = cwd;
+    while (true) {
+        const execroot_name = std.fs.path.basename(candidate);
+        if (std.fs.path.dirname(candidate)) |worker_dir| {
+            if (std.fs.path.dirname(worker_dir)) |bazel_workers_dir| {
+                if (std.mem.eql(u8, std.fs.path.basename(bazel_workers_dir), "bazel-workers")) {
+                    if (std.fs.path.dirname(bazel_workers_dir)) |output_base| {
+                        const execroot = try std.fs.path.join(allocator, &.{ output_base, "execroot", execroot_name });
+                        const exists = exists: {
+                            std.Io.Dir.accessAbsolute(io, execroot, .{}) catch |err| switch (err) {
+                                error.FileNotFound => break :exists false,
+                                else => |e| return e,
+                            };
+                            break :exists true;
+                        };
+                        if (exists) {
+                            return execroot;
+                        }
+                    }
+                }
+            }
+        }
+
+        const parent = std.fs.path.dirname(candidate) orelse return null;
+        if (parent.len == candidate.len) return null;
+        candidate = parent;
+    }
 }
 
 fn readFileAlloc(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]u8 {
