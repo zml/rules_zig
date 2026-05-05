@@ -111,6 +111,26 @@ test "worker builds use Bazel-owned cache across Bazel invocations" {
     try std.testing.expect(try ctx.workspaceDirExists("bazel-out/rules_zig_worker_cache"));
 }
 
+test "workers require Zig 0.16 or newer" {
+    const ctx = try BitContext.init();
+    defer ctx.deinit();
+
+    const result = try ctx.exec_bazel(.{
+        .argv = &[_][]const u8{
+            "build",
+            "//:binary",
+            "--@zig_toolchains//:version=0.15.2",
+            "--zig_workers=true",
+            "--strategy=ZigCompile=worker,local",
+        },
+        .print_on_error = false,
+    });
+    defer result.deinit();
+
+    try std.testing.expect(!result.success);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "Zig persistent workers require Zig 0.16.0 or newer; got 0.15.2") != null);
+}
+
 test "target build mode defaults to Debug" {
     const ctx = try BitContext.init();
     defer ctx.deinit();

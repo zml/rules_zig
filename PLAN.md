@@ -30,6 +30,7 @@ Goal: add an optional Bazel persistent worker for Zig compile actions so Zig can
 - [x] Worker responses capture child Zig stdout/stderr in `WorkResponse.output`; worker stdout contains only JSON `WorkResponse` messages.
 - [x] Non-worker invocation of the worker binary executes the same Zig command once and exits.
 - [x] Existing compile behavior is preserved when workers are disabled.
+- [x] Zig 0.15 remains supported for direct actions, but worker mode is rejected with a clear analysis error.
 - [ ] Existing docs/translate-c behavior is preserved when workers are disabled. Deferred by user request; not touched.
 - [x] Tests prove action registration, worker protocol basics, fallback mode, cache override, and at least one real worker build.
 - [ ] Docs explain opt-in, strategy flag, sandboxing limitation, and cache behavior. Deferred by user request.
@@ -77,7 +78,7 @@ Goal: add an optional Bazel persistent worker for Zig compile actions so Zig can
   - Use that path for both `--cache-dir` and `--global-cache-dir` in worker mode.
   - Keep existing `zigtoolchaininfo.zig_cache` for direct mode.
 
-- [ ] Refactor action registration.
+- [x] Refactor action registration.
   - Centralized Zig compile action creation in `zig_build.bzl`.
   - `zig_docs.bzl`, `translate_c.bzl`, and `zig_c_library.bzl` deferred by user request.
   - When workers are disabled, keep existing `ctx.actions.run` / `run_shell` shape.
@@ -177,7 +178,17 @@ Goal: add an optional Bazel persistent worker for Zig compile actions so Zig can
 - Added `//zig/private/worker_tests:worker_protocol_test` after baseline commit. It uses a fake Zig executable to verify JSON responses, request ids, cancellation, child stdout/stderr capture, bad cache arg filtering, worker cache arg injection, cache entry creation, and one-shot fallback.
 - Added integration coverage in `integration_tests_runner.zig`: worker build with `--zig_workers=true --strategy=ZigCompile=worker,local --worker_verbose --worker_quit_after_build`, poisoned `RULES_ZIG_CACHE_PREFIX`, `bazel shutdown`, then another worker build. This verifies the Bazel-owned cache path works across Bazel invocations and without the old `/tmp` or `/var/tmp` cache path.
 - Worker bootstrap compile now uses `bazel-out/rules_zig_worker_cache/bootstrap/<zig_version>` so the worker binary itself does not fail when `RULES_ZIG_CACHE_PREFIX` is unusable.
+- Worker source is intentionally Zig 0.16-only after user decision on 2026-05-05. No `anytype`/version-branch compatibility layer remains in `worker.zig`.
+- `zig_build.bzl` rejects `--zig_workers=true` with Zig versions older than 0.16. Direct 0.15 builds continue to work because the gate lives in compile-action registration, not the implicit worker tool target.
+- Added integration coverage that `--@zig_toolchains//:version=0.15.2 --zig_workers=true` fails with the explicit 0.16 worker requirement.
 - Additional verification passed:
   - `bazel build //zig/private/worker:worker --repo_env=RULES_ZIG_CACHE_PREFIX=/dev/null/rules_zig_direct_cache --verbose_failures`
   - `bazel test //zig/private/worker_tests:worker_protocol_test --test_output=errors --verbose_failures`
+  - `bazel test //zig/tests/integration_tests:bzlmod_test_bazel_.bazelversion --test_output=errors --verbose_failures`
+- Zig 0.16-only worker simplification verification passed:
+  - `bazel test //zig/private/worker_tests:worker_protocol_test --test_output=errors --verbose_failures`
+  - `bazel test //zig/tests:rules_test --test_output=errors --verbose_failures`
+  - `bazel build //zig/tests/simple-library:library --zig_workers=true --strategy=ZigCompile=worker,local --worker_verbose --worker_quit_after_build --verbose_failures`
+  - `bazel build //zig/tests/simple-library:library --@zig_toolchains//:version=0.15.2 --verbose_failures`
+  - `bazel build //zig/tests/simple-library:library --@zig_toolchains//:version=0.15.2 --zig_workers=true --strategy=ZigCompile=worker,local --verbose_failures` fails as expected with `Zig persistent workers require Zig 0.16.0 or newer; got 0.15.2`
   - `bazel test //zig/tests/integration_tests:bzlmod_test_bazel_.bazelversion --test_output=errors --verbose_failures`

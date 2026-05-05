@@ -224,6 +224,12 @@ def _shared_lib_extension(os):
 def _executable_extension(os):
     return ".exe" if os == "windows" else ""
 
+def _zig_workers_supported(zig_version):
+    parts = zig_version.split(".")
+    if len(parts) < 2:
+        return False
+    return int(parts[0]) > 0 or (int(parts[0]) == 0 and int(parts[1]) >= 16)
+
 def _add_global_compile_args(ctx, *, zigtoolchaininfo, zigtargetinfo, use_cc_common_link, args):
     if use_cc_common_link:
         args.add_all([
@@ -264,6 +270,8 @@ def _run_zig_compile_action(ctx, *, zigtoolchaininfo, outputs, inputs, arguments
             **zig_build_kwargs
         )
         return
+    if not _zig_workers_supported(zigtoolchaininfo.zig_version):
+        fail("Zig persistent workers require Zig 0.16.0 or newer; got {}".format(zigtoolchaininfo.zig_version))
 
     startup_args = ctx.actions.args()
     startup_args.add_all([
