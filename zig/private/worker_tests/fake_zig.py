@@ -9,7 +9,12 @@ def main() -> int:
     argv = sys.argv[1:]
     pathlib.Path(log_path).parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "a", encoding="utf-8") as log:
-        log.write(" ".join(argv) + "\n")
+        log.write(
+            " ".join(argv)
+            + f" ZIG_LOCAL_CACHE_DIR={os.environ.get('ZIG_LOCAL_CACHE_DIR', '')}"
+            + f" ZIG_GLOBAL_CACHE_DIR={os.environ.get('ZIG_GLOBAL_CACHE_DIR', '')}"
+            + "\n"
+        )
 
     cache_dir = None
     global_cache_dir = None

@@ -32,6 +32,8 @@ def main() -> int:
 
     env = os.environ.copy()
     env["FAKE_ZIG_LOG"] = str(workdir / "fake-zig.log")
+    env["ZIG_LOCAL_CACHE_DIR"] = "/dev/null/rules_zig_bad_env_local_cache"
+    env["ZIG_GLOBAL_CACHE_DIR"] = "/dev/null/rules_zig_bad_env_global_cache"
 
     requests = "\n".join(
         [
@@ -104,8 +106,12 @@ def main() -> int:
         assert invocation.startswith("build-exe "), invocation
         assert "/dev/null/rules_zig_bad_cache" not in invocation, invocation
         assert "/dev/null/rules_zig_bad_global_cache" not in invocation, invocation
+        assert "/dev/null/rules_zig_bad_env_local_cache" not in invocation, invocation
+        assert "/dev/null/rules_zig_bad_env_global_cache" not in invocation, invocation
         assert_contains(invocation, "--cache-dir bazel-out/rules_zig_worker_cache/test-version")
         assert_contains(invocation, "--global-cache-dir bazel-out/rules_zig_worker_cache/test-version")
+        assert_contains(invocation, "ZIG_LOCAL_CACHE_DIR=bazel-out/rules_zig_worker_cache/test-version")
+        assert_contains(invocation, "ZIG_GLOBAL_CACHE_DIR=bazel-out/rules_zig_worker_cache/test-version")
 
     assert (workdir / "bazel-out/rules_zig_worker_cache/test-version/fake-zig-local-cache-entry").is_file()
     assert (workdir / "bazel-out/rules_zig_worker_cache/test-version/fake-zig-global-cache-entry").is_file()
@@ -145,6 +151,8 @@ def main() -> int:
     shared_cache = sandbox_execroot / "bazel-out/rules_zig_worker_cache/test-version"
     assert_contains(sandbox_invocation, f"--cache-dir {shared_cache}")
     assert_contains(sandbox_invocation, f"--global-cache-dir {shared_cache}")
+    assert_contains(sandbox_invocation, f"ZIG_LOCAL_CACHE_DIR={shared_cache}")
+    assert_contains(sandbox_invocation, f"ZIG_GLOBAL_CACHE_DIR={shared_cache}")
     assert (shared_cache / "fake-zig-local-cache-entry").is_file()
     assert not (sandbox_workdir / "bazel-out/rules_zig_worker_cache/test-version/fake-zig-local-cache-entry").exists()
 

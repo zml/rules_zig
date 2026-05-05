@@ -33,11 +33,8 @@ const Stream = enum { stdout, stderr };
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const allocator = init.arena.allocator();
+    const environ = init.minimal.environ;
     const raw_args = try init.minimal.args.toSlice(allocator);
-    try mainImpl(allocator, io, raw_args);
-}
-
-fn mainImpl(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const u8) !void {
     var persistent = false;
     var startup_args: std.ArrayList([]const u8) = .empty;
     defer startup_args.deinit(allocator);
@@ -65,8 +62,8 @@ fn mainImpl(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const 
         try argv.append(arena, options.zig_exe);
         try appendExpandedArgs(arena, io, &expanded_args, remaining.args);
         try appendFilteredRequestArgs(arena, &argv, expanded_args.items);
-        try appendWorkerCacheArgs(arena, io, &argv, options.zig_version);
-        const result = try runZig(arena, io, argv.items);
+        const cache = try appendWorkerCacheArgs(arena, io, &argv, options.zig_version);
+        const result = try runZig(arena, io, environ, argv.items, cache);
         if (result.output.len > 0) {
             try writeAll(io, .stderr, result.output);
         }
@@ -96,9 +93,9 @@ fn mainImpl(allocator: std.mem.Allocator, io: std.Io, raw_args: []const []const 
         try argv.append(arena, options.zig_exe);
         try appendFilteredRequestArgs(arena, &argv, remaining.args);
         try appendFilteredRequestArgs(arena, &argv, request.arguments);
-        try appendWorkerCacheArgs(arena, io, &argv, options.zig_version);
+        const cache = try appendWorkerCacheArgs(arena, io, &argv, options.zig_version);
 
-        const result = runZig(arena, io, argv.items) catch |err| result: {
+        const result = runZig(arena, io, environ, argv.items, cache) catch |err| result: {
             const msg = try std.fmt.allocPrint(arena, "failed to run zig: {s}\n", .{@errorName(err)});
             break :result RunResult{ .exit_code = 1, .output = msg };
         };
@@ -165,13 +162,14 @@ fn appendFilteredRequestArgs(allocator: std.mem.Allocator, argv: *std.ArrayList(
     }
 }
 
-fn appendWorkerCacheArgs(allocator: std.mem.Allocator, io: std.Io, argv: *std.ArrayList([]const u8), zig_version: []const u8) !void {
+fn appendWorkerCacheArgs(allocator: std.mem.Allocator, io: std.Io, argv: *std.ArrayList([]const u8), zig_version: []const u8) ![]const u8 {
     const cache = try workerCachePath(allocator, io, zig_version);
     try std.Io.Dir.cwd().createDirPath(io, cache);
     try argv.append(allocator, "--cache-dir");
     try argv.append(allocator, cache);
     try argv.append(allocator, "--global-cache-dir");
     try argv.append(allocator, cache);
+    return cache;
 }
 
 fn workerCachePath(allocator: std.mem.Allocator, io: std.Io, zig_version: []const u8) ![]u8 {
@@ -218,8 +216,16 @@ fn readFileAlloc(allocator: std.mem.Allocator, io: std.Io, path: []const u8) ![]
     return try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(32 * 1024 * 1024));
 }
 
-fn runZig(allocator: std.mem.Allocator, io: std.Io, argv: []const []const u8) !RunResult {
-    const result = try std.process.run(allocator, io, .{ .argv = argv });
+fn runZig(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, argv: []const []const u8, cache: []const u8) !RunResult {
+    var env_map = try std.process.Environ.createMap(environ, allocator);
+    defer env_map.deinit();
+    try env_map.put("ZIG_LOCAL_CACHE_DIR", cache);
+    try env_map.put("ZIG_GLOBAL_CACHE_DIR", cache);
+
+    const result = try std.process.run(allocator, io, .{
+        .argv = argv,
+        .environ_map = &env_map,
+    });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
 
