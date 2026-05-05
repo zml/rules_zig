@@ -6,3 +6,4 @@
 build --flag_alias=zig_version=@zig_toolchains//:version
 build --flag_alias=zig_mode=@rules_zig//zig/settings:mode
 build --flag_alias=zig_threaded=@rules_zig//zig/settings:threaded
+build --flag_alias=zig_workers=@rules_zig//zig/settings:use_workers

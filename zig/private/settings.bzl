@@ -31,6 +31,14 @@ ATTRS = {
         doc = "Whether to use cc_common.link to link zig binaries and shared libraries in the host configuration.",
         mandatory = True,
     ),
+    "use_workers": attr.label(
+        doc = "Whether to use persistent workers for Zig compile actions.",
+        mandatory = True,
+    ),
+    "host_use_workers": attr.label(
+        doc = "Whether to use persistent workers for Zig compile actions in the host configuration.",
+        mandatory = True,
+    ),
     "threaded": attr.label(
         doc = "The Zig multi- or single-threaded setting.",
         mandatory = True,
@@ -97,6 +105,7 @@ def _settings_impl(ctx):
     args.extend(THREADED_ARGS[threaded])
 
     use_cc_common_link = ctx.attr.host_use_cc_common_link[BuildSettingInfo].value if is_exec_configuration else ctx.attr.use_cc_common_link[BuildSettingInfo].value
+    use_workers = ctx.attr.host_use_workers[BuildSettingInfo].value if is_exec_configuration else ctx.attr.use_workers[BuildSettingInfo].value
 
     args.extend(ctx.attr.host_zigopt[BuildSettingInfo].value if is_exec_configuration else ctx.attr.zigopt[BuildSettingInfo].value)
 
@@ -104,6 +113,7 @@ def _settings_impl(ctx):
         mode = mode,
         threaded = threaded,
         use_cc_common_link = use_cc_common_link,
+        use_workers = use_workers,
         args = args,
     )
 

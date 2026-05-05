@@ -128,6 +128,12 @@ Use this at your own risk of hitting undefined behaviors.
         doc = "Zig build settings.",
         providers = [ZigSettingsInfo],
     ),
+    "_zig_worker": attr.label(
+        default = "//zig/private/worker:worker",
+        executable = True,
+        cfg = "exec",
+        doc = "The persistent worker used to invoke Zig compile actions.",
+    ),
 } | BAZEL_BUILTIN_ATTRS
 
 COMMON_EMIT_ATTRS = {
@@ -218,6 +224,74 @@ def _shared_lib_extension(os):
 def _executable_extension(os):
     return ".exe" if os == "windows" else ""
 
+def _add_global_compile_args(ctx, *, zigtoolchaininfo, zigtargetinfo, use_cc_common_link, args):
+    if use_cc_common_link:
+        args.add_all([
+            # For now, linking with cc_common.link implies linking with libc.
+            # But this should probably be made configurable.
+            "-lc",
+            # This is implied too unless disabled further down.
+            # This is because zig compiler-rt ships with __zig_probe_stack which doesn't exist in regular compiler-rt.
+            "-fcompiler-rt",
+        ])
+
+    zig_lib_dir(
+        zigtoolchaininfo = zigtoolchaininfo,
+        args = args,
+    )
+    zig_cache_output(
+        zigtoolchaininfo = zigtoolchaininfo,
+        args = args,
+    )
+    zig_settings(
+        settings = ctx.attr._settings[ZigSettingsInfo],
+        args = args,
+    )
+    zig_target_platform(
+        target = zigtargetinfo,
+        args = args,
+    )
+
+def _run_zig_compile_action(ctx, *, zigtoolchaininfo, outputs, inputs, arguments, mnemonic, progress_message, zig_build_kwargs):
+    if not ctx.attr._settings[ZigSettingsInfo].use_workers:
+        ctx.actions.run(
+            outputs = outputs,
+            inputs = inputs,
+            executable = zigtoolchaininfo.zig_exe_path,
+            arguments = arguments,
+            mnemonic = mnemonic,
+            progress_message = progress_message,
+            **zig_build_kwargs
+        )
+        return
+
+    startup_args = ctx.actions.args()
+    startup_args.add_all([
+        "--zig-exe",
+        zigtoolchaininfo.zig_exe_path,
+        "--zig-version",
+        zigtoolchaininfo.zig_version,
+    ])
+
+    worker_kwargs = dict(zig_build_kwargs)
+    execution_requirements = dict(worker_kwargs.pop("execution_requirements", {}))
+    execution_requirements.update({
+        "requires-worker-protocol": "json",
+        "supports-workers": "1",
+        "worker-key-mnemonic": "ZigCompile",
+    })
+
+    ctx.actions.run(
+        outputs = outputs,
+        inputs = inputs,
+        executable = ctx.executable._zig_worker,
+        arguments = [startup_args] + arguments,
+        mnemonic = mnemonic,
+        progress_message = progress_message,
+        execution_requirements = execution_requirements,
+        **worker_kwargs
+    )
+
 def zig_build_impl(ctx, *, kind):
     """Common implementation for Zig build rules.
 
@@ -265,20 +339,26 @@ def zig_build_impl(ctx, *, kind):
     )
 
     args = ctx.actions.args()
-    args.use_param_file("@%s")
+    args.set_param_file_format("multiline")
+    args.use_param_file("@%s", use_always = True)
 
     global_args = ctx.actions.args()
     global_args.use_param_file("@%s")
 
-    if use_cc_common_link:
-        global_args.add_all([
-            # For now, linking with cc_common.link implies linking with libc.
-            # But this should probably be made configurable.
-            "-lc",
-            # This is implied too unless disabled further down.
-            # This is because zig compiler-rt ships with __zig_probe_stack which doesn't exist in regular compiler-rt.
-            "-fcompiler-rt",
-        ])
+    _add_global_compile_args(
+        ctx,
+        zigtoolchaininfo = zigtoolchaininfo,
+        zigtargetinfo = zigtargetinfo,
+        use_cc_common_link = use_cc_common_link,
+        args = global_args,
+    )
+    _add_global_compile_args(
+        ctx,
+        zigtoolchaininfo = zigtoolchaininfo,
+        zigtargetinfo = zigtargetinfo,
+        use_cc_common_link = use_cc_common_link,
+        args = args,
+    )
 
     if ctx.attr.compiler_runtime == "include":
         args.add("-fcompiler-rt")
@@ -287,16 +367,6 @@ def zig_build_impl(ctx, *, kind):
 
     if ctx.attr.strip_debug_symbols:
         args.add("-fstrip")
-
-    zig_lib_dir(
-        zigtoolchaininfo = zigtoolchaininfo,
-        args = global_args,
-    )
-
-    zig_cache_output(
-        zigtoolchaininfo = zigtoolchaininfo,
-        args = global_args,
-    )
 
     location_targets = ctx.attr.data
 
@@ -389,16 +459,6 @@ def zig_build_impl(ctx, *, kind):
             cdeps = cdeps,
             zigopts = zigopts,
         )
-
-    zig_settings(
-        settings = ctx.attr._settings[ZigSettingsInfo],
-        args = global_args,
-    )
-
-    zig_target_platform(
-        target = zigtargetinfo,
-        args = global_args,
-    )
 
     c_module = None
     if need_translate_c(root_module.cc_info):
@@ -493,14 +553,15 @@ def zig_build_impl(ctx, *, kind):
         if use_cc_common_link:
             static_lib = ctx.actions.declare_file(ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
             args.add(static_lib, format = "-femit-bin=%s")
-            ctx.actions.run(
+            _run_zig_compile_action(
+                ctx,
+                zigtoolchaininfo = zigtoolchaininfo,
                 outputs = [static_lib] + auxiliary_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
-                arguments = ["build-lib", global_args, args],
+                arguments = ["build-lib", args],
                 mnemonic = "ZigBuildLib",
                 progress_message = "zig build-lib %{label}",
-                **zig_build_kwargs
+                zig_build_kwargs = zig_build_kwargs,
             )
 
             cc_toolchain, feature_configuration = find_cc_toolchain(ctx, mandatory = True)
@@ -530,51 +591,62 @@ def zig_build_impl(ctx, *, kind):
             )
         else:
             args.add(bin_output, format = "-femit-bin=%s")
-            ctx.actions.run(
+            _run_zig_compile_action(
+                ctx,
+                zigtoolchaininfo = zigtoolchaininfo,
                 outputs = [bin_output] + auxiliary_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
-                arguments = ["build-exe", global_args, args],
+                arguments = ["build-exe", args],
                 mnemonic = "ZigBuildExe",
                 progress_message = "zig build-exe %{label}",
-                **zig_build_kwargs
+                zig_build_kwargs = zig_build_kwargs,
             )
     elif kind == "zig_test":
         if use_cc_common_link:
             bc = ctx.actions.declare_file(ctx.label.name + ".bc")
-            test_args = ctx.actions.args()
-            test_args.add("-fno-emit-bin")
+            args.add("-fno-emit-bin")
 
             # TODO[CK] Remove once we drop support for Zig 0.15 and use test-obj.
             if ctx.attr.emit_llvm_bc:
                 output_groups["llvm_bc"] = depset([bc])
-            test_args.add(bc, format = "-femit-llvm-bc=%s")
-            ctx.actions.run(
+            args.add(bc, format = "-femit-llvm-bc=%s")
+            _run_zig_compile_action(
+                ctx,
+                zigtoolchaininfo = zigtoolchaininfo,
                 outputs = [bc] + auxiliary_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
-                arguments = ["test", "--test-no-exec", global_args, args, test_args],
+                arguments = ["test", "--test-no-exec", args],
                 mnemonic = "ZigBuildTest",
                 progress_message = "zig test %{label}",
-                **zig_build_kwargs
+                zig_build_kwargs = zig_build_kwargs,
             )
 
             static_lib = ctx.actions.declare_file(ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
             lib_args = ctx.actions.args()
+            lib_args.set_param_file_format("multiline")
+            lib_args.use_param_file("@%s", use_always = True)
+            _add_global_compile_args(
+                ctx,
+                zigtoolchaininfo = zigtoolchaininfo,
+                zigtargetinfo = zigtargetinfo,
+                use_cc_common_link = use_cc_common_link,
+                args = lib_args,
+            )
             lib_args.add_all([
                 "-fPIC",
                 "-fcompiler-rt",
             ])
             lib_args.add(static_lib, format = "-femit-bin=%s")
             lib_args.add(bc)
-            ctx.actions.run(
+            _run_zig_compile_action(
+                ctx,
+                zigtoolchaininfo = zigtoolchaininfo,
                 outputs = [static_lib],
                 inputs = [bc],
-                executable = zigtoolchaininfo.zig_exe_path,
-                arguments = ["build-lib", global_args, lib_args],
+                arguments = ["build-lib", lib_args],
                 mnemonic = "ZigBuildLib",
                 progress_message = "zig build-lib %{label}",
-                **zig_build_kwargs
+                zig_build_kwargs = zig_build_kwargs,
             )
 
             cc_toolchain, feature_configuration = find_cc_toolchain(ctx, mandatory = True)
@@ -604,28 +676,30 @@ def zig_build_impl(ctx, *, kind):
             )
         else:
             args.add(bin_output, format = "-femit-bin=%s")
-            ctx.actions.run(
+            _run_zig_compile_action(
+                ctx,
+                zigtoolchaininfo = zigtoolchaininfo,
                 outputs = [bin_output] + auxiliary_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
-                arguments = ["test", "--test-no-exec", global_args, args],
+                arguments = ["test", "--test-no-exec", args],
                 mnemonic = "ZigBuildTest",
                 progress_message = "zig test %{label}",
-                **zig_build_kwargs
+                zig_build_kwargs = zig_build_kwargs,
             )
     elif kind == "zig_static_library":
         if ctx.attr.emit_bin:
             args.add(bin_output, format = "-femit-bin=%s")
         else:
             args.add("-fno-emit-bin")
-        ctx.actions.run(
+        _run_zig_compile_action(
+            ctx,
+            zigtoolchaininfo = zigtoolchaininfo,
             outputs = ([bin_output] if ctx.attr.emit_bin else []) + auxiliary_outputs,
             inputs = inputs,
-            executable = zigtoolchaininfo.zig_exe_path,
-            arguments = ["build-lib", global_args, args],
+            arguments = ["build-lib", args],
             mnemonic = "ZigBuildStaticLib",
             progress_message = "zig build-lib %{label}",
-            **zig_build_kwargs
+            zig_build_kwargs = zig_build_kwargs,
         )
 
         if ctx.attr.emit_bin:
@@ -642,14 +716,15 @@ def zig_build_impl(ctx, *, kind):
         if use_cc_common_link:
             static_lib = ctx.actions.declare_file(ctx.label.name + _static_lib_extension(zigtargetinfo.triple.os))
             args.add(static_lib, format = "-femit-bin=%s")
-            ctx.actions.run(
+            _run_zig_compile_action(
+                ctx,
+                zigtoolchaininfo = zigtoolchaininfo,
                 outputs = [static_lib] + auxiliary_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
-                arguments = ["build-lib", global_args, args],
+                arguments = ["build-lib", args],
                 mnemonic = "ZigBuildLib",
                 progress_message = "zig build-lib %{label}",
-                **zig_build_kwargs
+                zig_build_kwargs = zig_build_kwargs,
             )
 
             cc_toolchain, feature_configuration = find_cc_toolchain(ctx, mandatory = True)
@@ -694,14 +769,15 @@ def zig_build_impl(ctx, *, kind):
             # Here we explicitly set the SONAME to match the output filename.
             args.add(bin_output_name, format = "-fsoname=%s")
 
-            ctx.actions.run(
+            _run_zig_compile_action(
+                ctx,
+                zigtoolchaininfo = zigtoolchaininfo,
                 outputs = [bin_output] + auxiliary_outputs,
                 inputs = inputs,
-                executable = zigtoolchaininfo.zig_exe_path,
-                arguments = ["build-lib", "-dynamic", global_args, args],
+                arguments = ["build-lib", "-dynamic", args],
                 mnemonic = "ZigBuildSharedLib",
                 progress_message = "zig build-lib -dynamic %{label}",
-                **zig_build_kwargs
+                zig_build_kwargs = zig_build_kwargs,
             )
 
             cc_toolchain, feature_configuration = find_cc_toolchain(ctx, mandatory = False)

@@ -14,6 +14,7 @@ load(
 )
 
 _SETTINGS_USE_CC_COMMON_LINK = canonical_label("@//zig/settings:use_cc_common_link")
+_SETTINGS_USE_WORKERS = canonical_label("@//zig/settings:use_workers")
 
 def _simple_binary_test_impl(ctx):
     env = analysistest.begin(ctx)
@@ -531,6 +532,63 @@ def _test_use_cc_common_link_simple_binary(name):
     )
     return [":" + name]
 
+def _worker_disabled_simple_binary_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    build = [
+        action
+        for action in analysistest.target_actions(env)
+        if action.mnemonic == "ZigBuildExe"
+    ]
+    asserts.equals(env, 1, len(build), "zig_binary should generate one ZigBuildExe action.")
+    build = build[0]
+
+    asserts.false(env, "--zig-exe" in build.argv)
+    asserts.false(env, "--zig-version" in build.argv)
+
+    return analysistest.end(env)
+
+_worker_disabled_simple_binary_test = analysistest.make(_worker_disabled_simple_binary_test_impl)
+
+def _test_worker_disabled_simple_binary(name):
+    _worker_disabled_simple_binary_test(
+        name = name,
+        target_under_test = "//zig/tests/simple-binary:binary",
+        size = "small",
+    )
+    return [":" + name]
+
+def _worker_enabled_simple_binary_test_impl(ctx):
+    env = analysistest.begin(ctx)
+
+    build = [
+        action
+        for action in analysistest.target_actions(env)
+        if action.mnemonic == "ZigBuildExe"
+    ]
+    asserts.equals(env, 1, len(build), "zig_binary should generate one ZigBuildExe action.")
+    build = build[0]
+
+    asserts.true(env, "--zig-exe" in build.argv)
+    asserts.true(env, "--zig-version" in build.argv)
+
+    return analysistest.end(env)
+
+_worker_enabled_simple_binary_test = analysistest.make(
+    _worker_enabled_simple_binary_test_impl,
+    config_settings = {
+        _SETTINGS_USE_WORKERS: True,
+    },
+)
+
+def _test_worker_enabled_simple_binary(name):
+    _worker_enabled_simple_binary_test(
+        name = name,
+        target_under_test = "//zig/tests/simple-binary:binary",
+        size = "small",
+    )
+    return [":" + name]
+
 def rules_test_suite(name):
     """Generate test suite and test targets for common rule analysis tests.
 
@@ -549,6 +607,8 @@ def rules_test_suite(name):
     tests += _test_compiler_runtime(name = "compiler_runtime_test")
     tests += _test_strip_debug_symbols(name = "strip_debug_symbols_test")
     tests += _test_use_cc_common_link_simple_binary(name = "use_cc_common_link_simple_binary_test")
+    tests += _test_worker_disabled_simple_binary(name = "worker_disabled_simple_binary_test")
+    tests += _test_worker_enabled_simple_binary(name = "worker_enabled_simple_binary_test")
     native.test_suite(
         name = name,
         tests = tests,

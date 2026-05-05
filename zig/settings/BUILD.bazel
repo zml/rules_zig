@@ -11,10 +11,12 @@ settings(
     host_mode = ":host_mode",
     host_threaded = ":host_threaded",
     host_use_cc_common_link = ":host_use_cc_common_link",
+    host_use_workers = ":host_use_workers",
     host_zigopt = ":host_zigopt",
     mode = ":mode",
     threaded = ":threaded",
     use_cc_common_link = ":use_cc_common_link",
+    use_workers = ":use_workers",
     visibility = ["//visibility:public"],
     zigopt = ":zigopt",
 )
@@ -27,6 +29,18 @@ bool_flag(
 
 bool_flag(
     name = "host_use_cc_common_link",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+bool_flag(
+    name = "use_workers",
+    build_setting_default = False,
+    visibility = ["//visibility:private"],
+)
+
+bool_flag(
+    name = "host_use_workers",
     build_setting_default = False,
     visibility = ["//visibility:private"],
 )
