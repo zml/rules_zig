@@ -292,6 +292,13 @@ fn writeJsonString(io: anytype, value: []const u8) !void {
 }
 
 fn readLine(allocator: std.mem.Allocator, io: anytype) !?[]u8 {
+    if (is_zig_0_16_or_later) {
+        return readLine016(allocator, io);
+    }
+    return readLinePre016(allocator, io);
+}
+
+fn readLine016(allocator: std.mem.Allocator, io: anytype) !?[]u8 {
     var line: std.ArrayList(u8) = .empty;
     errdefer line.deinit(allocator);
     var buf: [1]u8 = undefined;
@@ -300,6 +307,29 @@ fn readLine(allocator: std.mem.Allocator, io: anytype) !?[]u8 {
             error.EndOfStream => 0,
             else => |e| return e,
         };
+        if (n == 0) {
+            if (line.items.len == 0) {
+                line.deinit(allocator);
+                return null;
+            }
+            return try line.toOwnedSlice(allocator);
+        }
+        if (buf[0] == '\n') {
+            if (line.items.len > 0 and line.items[line.items.len - 1] == '\r') {
+                _ = line.pop();
+            }
+            return try line.toOwnedSlice(allocator);
+        }
+        try line.append(allocator, buf[0]);
+    }
+}
+
+fn readLinePre016(allocator: std.mem.Allocator, io: anytype) !?[]u8 {
+    var line: std.ArrayList(u8) = .empty;
+    errdefer line.deinit(allocator);
+    var buf: [1]u8 = undefined;
+    while (true) {
+        const n = try readStdin(io, &buf);
         if (n == 0) {
             if (line.items.len == 0) {
                 line.deinit(allocator);
