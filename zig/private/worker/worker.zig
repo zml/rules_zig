@@ -53,28 +53,33 @@ fn mainImpl(allocator: std.mem.Allocator, raw_args: anytype, io: anytype) !void 
     const options = remaining.options;
 
     if (!persistent) {
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+
         var argv: std.ArrayList([]const u8) = .empty;
-        defer argv.deinit(allocator);
-        try argv.append(allocator, options.zig_exe);
-        try appendExpandedArgs(allocator, io, &argv, remaining.args);
-        const result = try runZig(allocator, io, argv.items);
-        defer allocator.free(result.output);
+        defer argv.deinit(arena);
+        try argv.append(arena, options.zig_exe);
+        try appendExpandedArgs(arena, io, &argv, remaining.args);
+        const result = try runZig(arena, io, argv.items);
         if (result.output.len > 0) {
             try writeAll(io, .stderr, result.output);
         }
         std.process.exit(@intCast(result.exit_code));
     }
 
-    while (try readLine(allocator, io)) |line| {
-        defer allocator.free(line);
+    while (true) {
+        var arena_state = std.heap.ArenaAllocator.init(allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
 
-        const request = parseWorkRequest(allocator, line) catch |err| {
-            const msg = try std.fmt.allocPrint(allocator, "failed to parse WorkRequest: {s}\n", .{@errorName(err)});
-            defer allocator.free(msg);
+        const line = (try readLine(arena, io)) orelse break;
+
+        const request = parseWorkRequest(arena, line) catch |err| {
+            const msg = try std.fmt.allocPrint(arena, "failed to parse WorkRequest: {s}\n", .{@errorName(err)});
             try writeWorkResponse(io, .{ .exit_code = 1, .output = msg, .request_id = 0 });
             continue;
         };
-        defer freeWorkRequest(allocator, request);
 
         if (request.cancel) {
             try writeWorkResponse(io, .{ .exit_code = 0, .output = "", .request_id = request.request_id, .was_cancelled = true });
@@ -82,17 +87,16 @@ fn mainImpl(allocator: std.mem.Allocator, raw_args: anytype, io: anytype) !void 
         }
 
         var argv: std.ArrayList([]const u8) = .empty;
-        defer argv.deinit(allocator);
-        try argv.append(allocator, options.zig_exe);
-        try appendFilteredRequestArgs(allocator, &argv, remaining.args);
-        try appendFilteredRequestArgs(allocator, &argv, request.arguments);
-        try appendWorkerCacheArgs(allocator, io, &argv, options.zig_version);
+        defer argv.deinit(arena);
+        try argv.append(arena, options.zig_exe);
+        try appendFilteredRequestArgs(arena, &argv, remaining.args);
+        try appendFilteredRequestArgs(arena, &argv, request.arguments);
+        try appendWorkerCacheArgs(arena, io, &argv, options.zig_version);
 
-        const result = runZig(allocator, io, argv.items) catch |err| result: {
-            const msg = try std.fmt.allocPrint(allocator, "failed to run zig: {s}\n", .{@errorName(err)});
+        const result = runZig(arena, io, argv.items) catch |err| result: {
+            const msg = try std.fmt.allocPrint(arena, "failed to run zig: {s}\n", .{@errorName(err)});
             break :result RunResult{ .exit_code = 1, .output = msg };
         };
-        defer allocator.free(result.output);
 
         try writeWorkResponse(io, .{
             .exit_code = result.exit_code,
@@ -137,12 +141,11 @@ fn appendExpandedArgs(allocator: std.mem.Allocator, io: anytype, argv: *std.Arra
     for (args) |arg| {
         if (arg.len > 1 and arg[0] == '@' and !(arg.len > 2 and arg[1] == '@')) {
             const content = try readFileAlloc(allocator, io, arg[1..]);
-            defer allocator.free(content);
             var it = std.mem.splitScalar(u8, content, '\n');
             while (it.next()) |line| {
                 const trimmed = std.mem.trimEnd(u8, line, "\r");
                 if (trimmed.len != 0) {
-                    try argv.append(allocator, try allocator.dupe(u8, trimmed));
+                    try argv.append(allocator, trimmed);
                 }
             }
         } else {
@@ -226,8 +229,7 @@ fn termExitCode(term: std.process.Child.Term) i32 {
 }
 
 fn parseWorkRequest(allocator: std.mem.Allocator, line: []const u8) !WorkRequest {
-    var parsed = try std.json.parseFromSlice(std.json.Value, allocator, line, .{});
-    defer parsed.deinit();
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, line, .{});
 
     const root = parsed.value.object;
     const args_value = root.get("arguments") orelse return error.MissingArguments;
@@ -236,7 +238,7 @@ fn parseWorkRequest(allocator: std.mem.Allocator, line: []const u8) !WorkRequest
     errdefer allocator.free(args);
 
     for (args_array.items, 0..) |item, i| {
-        args[i] = try allocator.dupe(u8, item.string);
+        args[i] = item.string;
     }
 
     return .{
@@ -244,13 +246,6 @@ fn parseWorkRequest(allocator: std.mem.Allocator, line: []const u8) !WorkRequest
         .request_id = if (root.get("requestId")) |v| v.integer else 0,
         .cancel = if (root.get("cancel")) |v| v.bool else false,
     };
-}
-
-fn freeWorkRequest(allocator: std.mem.Allocator, request: WorkRequest) void {
-    for (request.arguments) |arg| {
-        allocator.free(arg);
-    }
-    allocator.free(request.arguments);
 }
 
 const Stream = enum { stdout, stderr };
