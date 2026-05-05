@@ -2,6 +2,7 @@
 
 def _zig_worker_binary_impl(ctx):
     zigtoolchaininfo = ctx.toolchains["//zig:toolchain_type"].zigtoolchaininfo
+    worker_bootstrap_cache = "bazel-out/rules_zig_worker_cache/bootstrap/{}".format(zigtoolchaininfo.zig_version)
 
     output = ctx.actions.declare_file(ctx.label.name + (".exe" if ctx.target_platform_has_constraint(ctx.attr._windows_constraint[platform_common.ConstraintValueInfo]) else ""))
 
@@ -13,9 +14,9 @@ def _zig_worker_binary_impl(ctx):
     args.add("--zig-lib-dir")
     args.add(zigtoolchaininfo.zig_lib_path)
     args.add("--cache-dir")
-    args.add(zigtoolchaininfo.zig_cache)
+    args.add(worker_bootstrap_cache)
     args.add("--global-cache-dir")
-    args.add(zigtoolchaininfo.zig_cache)
+    args.add(worker_bootstrap_cache)
     args.add("-femit-bin={}".format(output.path))
 
     ctx.actions.run(
@@ -25,9 +26,9 @@ def _zig_worker_binary_impl(ctx):
         outputs = [output],
         tools = zigtoolchaininfo.zig_files,
         env = {
-            "ZIG_GLOBAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+            "ZIG_GLOBAL_CACHE_DIR": worker_bootstrap_cache,
             "ZIG_LIB_DIR": zigtoolchaininfo.zig_lib_path,
-            "ZIG_LOCAL_CACHE_DIR": zigtoolchaininfo.zig_cache,
+            "ZIG_LOCAL_CACHE_DIR": worker_bootstrap_cache,
         },
         mnemonic = "ZigBuildWorker",
         progress_message = "zig build worker %{label}",

@@ -1,0 +1,20 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_test")
+
+py_binary(
+    name = "fake_zig",
+    srcs = ["fake_zig.py"],
+)
+
+py_test(
+    name = "worker_protocol_test",
+    size = "small",
+    srcs = ["worker_protocol_test.py"],
+    args = [
+        "$(rootpath //zig/private/worker:worker)",
+        "$(rootpath :fake_zig)",
+    ],
+    data = [
+        ":fake_zig",
+        "//zig/private/worker",
+    ],
+)

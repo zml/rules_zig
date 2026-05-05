@@ -31,7 +31,7 @@ Goal: add an optional Bazel persistent worker for Zig compile actions so Zig can
 - [x] Non-worker invocation of the worker binary executes the same Zig command once and exits.
 - [x] Existing compile behavior is preserved when workers are disabled.
 - [ ] Existing docs/translate-c behavior is preserved when workers are disabled. Deferred by user request; not touched.
-- [ ] Tests prove action registration, worker protocol basics, fallback mode, and at least one real worker build.
+- [x] Tests prove action registration, worker protocol basics, fallback mode, cache override, and at least one real worker build.
 - [ ] Docs explain opt-in, strategy flag, sandboxing limitation, and cache behavior. Deferred by user request.
 
 ## Implementation Tasks
@@ -97,14 +97,14 @@ Goal: add an optional Bazel persistent worker for Zig compile actions so Zig can
   - `zig_c_library.bzl`: deferred by user request.
   - `use_cc_common_link`: only Zig compile sub-actions should use worker; `cc_common.link` stays untouched.
 
-- [ ] Add tests.
+- [x] Add tests.
   - Unit/analysis tests:
     - settings provider exposes `use_workers`.
     - disabled actions have no worker startup args.
     - enabled actions use worker startup args.
     - execution requirements verified manually with `aquery`; analysis `Action` does not expose them.
     - strict final param file shape is present in action wiring; `aquery` expands it in display.
-  - Worker Zig tests:
+  - Worker protocol tests:
     - parse request/response JSON.
     - one-shot fallback runs a simple command.
     - persistent loop handles at least two requests.
@@ -114,6 +114,7 @@ Goal: add an optional Bazel persistent worker for Zig compile actions so Zig can
     - rebuild/touch source and verify success.
     - run under `--worker_quit_after_build` during tests to avoid leaked processes.
     - optionally inspect action args/cache path with `aquery`.
+    - integration test poisons `RULES_ZIG_CACHE_PREFIX`, restarts Bazel, and verifies worker builds still use `bazel-out/rules_zig_worker_cache`.
 
 - [ ] Update docs. Deferred by user request.
   - README cache section: explain worker cache path and that `/tmp` mount pairs are only needed for direct/sandbox cache mode.
@@ -173,4 +174,10 @@ Goal: add an optional Bazel persistent worker for Zig compile actions so Zig can
   - `bazel test //zig/tests:rules_test --test_output=errors --verbose_failures`
   - `bazel build //zig/private:all_files --verbose_failures`
 - Worker execution proof from build output: Bazel created a non-sandboxed singleplex `ZigCompile` worker and reported `1 worker`; `aquery` showed `ExecutionInfo: {requires-worker-protocol: json, supports-workers: 1, worker-key-mnemonic: ZigCompile}`.
-- Next useful loop: add Zig-level worker protocol tests or an e2e test wrapper that fails unless `--worker_verbose` reports worker execution.
+- Added `//zig/private/worker_tests:worker_protocol_test` after baseline commit. It uses a fake Zig executable to verify JSON responses, request ids, cancellation, child stdout/stderr capture, bad cache arg filtering, worker cache arg injection, cache entry creation, and one-shot fallback.
+- Added integration coverage in `integration_tests_runner.zig`: worker build with `--zig_workers=true --strategy=ZigCompile=worker,local --worker_verbose --worker_quit_after_build`, poisoned `RULES_ZIG_CACHE_PREFIX`, `bazel shutdown`, then another worker build. This verifies the Bazel-owned cache path works across Bazel invocations and without the old `/tmp` or `/var/tmp` cache path.
+- Worker bootstrap compile now uses `bazel-out/rules_zig_worker_cache/bootstrap/<zig_version>` so the worker binary itself does not fail when `RULES_ZIG_CACHE_PREFIX` is unusable.
+- Additional verification passed:
+  - `bazel build //zig/private/worker:worker --repo_env=RULES_ZIG_CACHE_PREFIX=/dev/null/rules_zig_direct_cache --verbose_failures`
+  - `bazel test //zig/private/worker_tests:worker_protocol_test --test_output=errors --verbose_failures`
+  - `bazel test //zig/tests/integration_tests:bzlmod_test_bazel_.bazelversion --test_output=errors --verbose_failures`

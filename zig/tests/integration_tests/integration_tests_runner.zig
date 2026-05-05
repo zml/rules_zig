@@ -66,6 +66,51 @@ test "Zig cache directory can be configured" {
     try std.testing.expectEqualStrings("/CACHE_OVERRIDE\n", result.stdout);
 }
 
+test "worker builds use Bazel-owned cache across Bazel invocations" {
+    const ctx = try BitContext.init();
+    defer ctx.deinit();
+
+    const first_result = try ctx.exec_bazel(.{
+        .argv = &[_][]const u8{
+            "build",
+            "//:binary",
+            "--zig_workers=true",
+            "--strategy=ZigCompile=worker,local",
+            "--worker_verbose",
+            "--worker_quit_after_build",
+            "--repo_env=RULES_ZIG_CACHE_PREFIX=/dev/null/rules_zig_direct_cache",
+        },
+    });
+    defer first_result.deinit();
+
+    try std.testing.expect(first_result.success);
+    try std.testing.expect(std.mem.indexOf(u8, first_result.stderr, "Created new non-sandboxed singleplex ZigCompile worker") != null);
+    try std.testing.expect(try ctx.workspaceDirExists("bazel-out/rules_zig_worker_cache"));
+
+    const shutdown_result = try ctx.exec_bazel(.{
+        .argv = &[_][]const u8{"shutdown"},
+    });
+    defer shutdown_result.deinit();
+    try std.testing.expect(shutdown_result.success);
+
+    const second_result = try ctx.exec_bazel(.{
+        .argv = &[_][]const u8{
+            "build",
+            "//:print_zig_version",
+            "--zig_workers=true",
+            "--strategy=ZigCompile=worker,local",
+            "--worker_verbose",
+            "--worker_quit_after_build",
+            "--repo_env=RULES_ZIG_CACHE_PREFIX=/dev/null/rules_zig_direct_cache",
+        },
+    });
+    defer second_result.deinit();
+
+    try std.testing.expect(second_result.success);
+    try std.testing.expect(std.mem.indexOf(u8, second_result.stderr, "Created new non-sandboxed singleplex ZigCompile worker") != null);
+    try std.testing.expect(try ctx.workspaceDirExists("bazel-out/rules_zig_worker_cache"));
+}
+
 test "target build mode defaults to Debug" {
     const ctx = try BitContext.init();
     defer ctx.deinit();
