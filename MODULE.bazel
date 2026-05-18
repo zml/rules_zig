@@ -33,7 +33,8 @@ use_repo(zig, "zig_toolchains")
 
 register_toolchains("@rules_zig//zig/target:all")
 
-register_toolchains("@zig_toolchains//:all")
+# Let root modules choose which Zig SDK toolchains to register.
+# register_toolchains("@zig_toolchains//:all")
 
 zig_dev = use_extension(
     "//zig:extensions.bzl",
