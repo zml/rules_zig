@@ -32,6 +32,32 @@ zig_toolchain = tag_class(
 Fetch and define toolchain targets for the given Zig SDK version.
 
 Defaults to the latest known version.
+    """,
+)
+
+zig_toolchain_variant = tag_class(
+    attrs = {
+        "name": attr.string(doc = "A descriptive suffix for generated toolchain targets.", mandatory = True),
+        "exec_compatible_with": attr.label_list(
+            doc = "Additional execution platform constraints for generated Zig SDK toolchain targets.",
+            mandatory = False,
+            default = [],
+        ),
+        "target_settings": attr.label_list(
+            doc = "Additional target settings for generated Zig SDK toolchain targets.",
+            mandatory = False,
+            default = [],
+        ),
+    },
+    doc = """\
+Customize generated Zig SDK toolchain wrappers.
+
+When no variants are declared, rules_zig generates one wrapper per Zig SDK
+version and execution platform with its default compatibility. If the root
+module declares variants, rules_zig instead generates one wrapper per variant,
+version, and execution platform. This lets the root module make generated Zig
+toolchains participate in custom build settings without manually wrapping every
+SDK toolchain.
 """,
 )
 
@@ -56,6 +82,7 @@ zig_mirrors = tag_class(
 
 TAG_CLASSES = {
     "toolchain": zig_toolchain,
+    "toolchain_variant": zig_toolchain_variant,
     "index": zig_index,
     "mirrors": zig_mirrors,
 }
@@ -100,6 +127,45 @@ def handle_toolchain_tags(modules, *, known_versions):
         versions.append(known_versions[0])
 
     return None, versions
+
+def _stringify_labels(labels):
+    return [str(label) for label in labels]
+
+def handle_toolchain_variant_tags(modules):
+    """Handle the zig module extension's toolchain_variant tags.
+
+    Exposed as a standalone function for unit testing.
+
+    Args:
+      modules: sequence of module objects.
+
+    Returns:
+      (err, variants), maybe an error or the list of variants.
+    """
+    variants = []
+
+    for mod in modules:
+        for variant in mod.tags.toolchain_variant:
+            if not mod.is_root:
+                return (["Only the root module may specify Zig SDK toolchain variants.", variant], None)
+
+            if not variant.name:
+                return (["Zig SDK toolchain variants must have a non-empty name.", variant], None)
+
+            variants.append(struct(
+                name = variant.name,
+                exec_compatible_with = _stringify_labels(variant.exec_compatible_with),
+                target_settings = _stringify_labels(variant.target_settings),
+            ))
+
+    if not variants:
+        variants.append(struct(
+            name = "",
+            exec_compatible_with = [],
+            target_settings = [],
+        ))
+
+    return None, variants
 
 def parse_zig_versions_json(json_string):
     """Parse a Zig SDK versions index in JSON format.
@@ -186,20 +252,21 @@ def _toolchain_extension(module_ctx):
     if err != None:
         fail(*err)
 
+    (err, toolchain_variants) = handle_toolchain_variant_tags(module_ctx.modules)
+    if err != None:
+        fail(*err)
+
     toolchain_names = []
     toolchain_labels = []
     toolchain_zig_versions = []
     toolchain_exec_lengths = []
     toolchain_exec_constraints = []
+    toolchain_target_settings_lengths = []
+    toolchain_target_settings = []
     for zig_version in versions:
         sanitized_zig_version = sanitize_version(zig_version)
         for platform, meta in PLATFORMS.items():
             repo_name = _DEFAULT_NAME + "_" + sanitized_zig_version + "_" + platform
-            toolchain_names.append(repo_name)
-            toolchain_labels.append("@{}//:zig_toolchain".format(repo_name))
-            toolchain_zig_versions.append(zig_version)
-            toolchain_exec_lengths.append(len(meta.compatible_with))
-            toolchain_exec_constraints.extend(meta.compatible_with)
             zig_repository(
                 name = repo_name,
                 url = known_versions[zig_version][platform].url,
@@ -208,6 +275,19 @@ def _toolchain_extension(module_ctx):
                 zig_version = zig_version,
                 platform = platform,
             )
+            for variant in toolchain_variants:
+                compatible_with = meta.compatible_with + variant.exec_compatible_with
+                name = repo_name
+                if variant.name:
+                    name = "{}_{}".format(name, variant.name)
+
+                toolchain_names.append(name)
+                toolchain_labels.append("@{}//:zig_toolchain".format(repo_name))
+                toolchain_zig_versions.append(zig_version)
+                toolchain_exec_lengths.append(len(compatible_with))
+                toolchain_exec_constraints.extend(compatible_with)
+                toolchain_target_settings_lengths.append(len(variant.target_settings))
+                toolchain_target_settings.extend(variant.target_settings)
 
     toolchains_repo(
         name = _DEFAULT_NAME + "_toolchains",
@@ -216,6 +296,8 @@ def _toolchain_extension(module_ctx):
         zig_versions = toolchain_zig_versions,
         exec_lengths = toolchain_exec_lengths,
         exec_constraints = toolchain_exec_constraints,
+        target_settings_lengths = toolchain_target_settings_lengths,
+        target_settings = toolchain_target_settings,
     )
 
 zig = module_extension(

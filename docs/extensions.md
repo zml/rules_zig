@@ -9,6 +9,7 @@ Extensions for bzlmod.
 <pre>
 zig = use_extension("@rules_zig//zig:extensions.bzl", "zig")
 zig.toolchain(<a href="#zig.toolchain-default">default</a>, <a href="#zig.toolchain-zig_version">zig_version</a>)
+zig.toolchain_variant(<a href="#zig.toolchain_variant-name">name</a>, <a href="#zig.toolchain_variant-exec_compatible_with">exec_compatible_with</a>, <a href="#zig.toolchain_variant-target_settings">target_settings</a>)
 zig.index(<a href="#zig.index-file">file</a>)
 zig.mirrors(<a href="#zig.mirrors-urls">urls</a>)
 </pre>
@@ -39,6 +40,27 @@ Defaults to the latest known version.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="zig.toolchain-default"></a>default |  Make this the default Zig SDK version. Can only be used once, and only in the root module.   | Boolean | optional |  `False`  |
 | <a id="zig.toolchain-zig_version"></a>zig_version |  The Zig SDK version.   | String | required |  |
+
+<a id="zig.toolchain_variant"></a>
+
+### toolchain_variant
+
+Customize generated Zig SDK toolchain wrappers.
+
+When no variants are declared, rules_zig generates one wrapper per Zig SDK
+version and execution platform with its default compatibility. If the root
+module declares variants, rules_zig instead generates one wrapper per variant,
+version, and execution platform. This lets the root module make generated Zig
+toolchains participate in custom build settings without manually wrapping every
+SDK toolchain.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="zig.toolchain_variant-name"></a>name |  A descriptive suffix for generated toolchain targets.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="zig.toolchain_variant-exec_compatible_with"></a>exec_compatible_with |  Additional execution platform constraints for generated Zig SDK toolchain targets.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="zig.toolchain_variant-target_settings"></a>target_settings |  Additional target settings for generated Zig SDK toolchain targets.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 <a id="zig.index"></a>
 

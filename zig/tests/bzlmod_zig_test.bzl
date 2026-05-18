@@ -5,6 +5,7 @@ load("@bazel_skylib//lib:unittest.bzl", "asserts", "unittest")
 load(
     "//zig/private/bzlmod:zig.bzl",
     "handle_toolchain_tags",
+    "handle_toolchain_variant_tags",
     "merge_version_specs",
     "parse_zig_versions_json",
 )
@@ -533,10 +534,114 @@ _zig_versions_test = unittest.make(
     _zig_versions_test_impl,
 )
 
+def _toolchain_variants_test_impl(ctx):
+    env = unittest.begin(ctx)
+
+    asserts.equals(
+        env,
+        (None, [
+            struct(
+                name = "",
+                exec_compatible_with = [],
+                target_settings = [],
+            ),
+        ]),
+        handle_toolchain_variant_tags([
+            struct(
+                is_root = True,
+                tags = struct(
+                    toolchain_variant = [],
+                ),
+            ),
+        ]),
+        "should use a single default variant when none are configured",
+    )
+
+    asserts.equals(
+        env,
+        (None, [
+            struct(
+                name = "remote",
+                exec_compatible_with = [],
+                target_settings = ["//tools/zig:remote"],
+            ),
+            struct(
+                name = "local",
+                exec_compatible_with = ["//tools/zig:local_exec"],
+                target_settings = ["//tools/zig:local"],
+            ),
+        ]),
+        handle_toolchain_variant_tags([
+            struct(
+                is_root = True,
+                tags = struct(
+                    toolchain_variant = [
+                        struct(
+                            name = "remote",
+                            exec_compatible_with = [],
+                            target_settings = ["//tools/zig:remote"],
+                        ),
+                        struct(
+                            name = "local",
+                            exec_compatible_with = ["//tools/zig:local_exec"],
+                            target_settings = ["//tools/zig:local"],
+                        ),
+                    ],
+                ),
+            ),
+        ]),
+        "should keep root module variants in declaration order",
+    )
+
+    variant = struct(
+        name = "local",
+        exec_compatible_with = [],
+        target_settings = [],
+    )
+    asserts.equals(
+        env,
+        (["Only the root module may specify Zig SDK toolchain variants.", variant], None),
+        handle_toolchain_variant_tags([
+            struct(
+                is_root = False,
+                tags = struct(
+                    toolchain_variant = [variant],
+                ),
+            ),
+        ]),
+        "only root may set toolchain variants",
+    )
+
+    variant = struct(
+        name = "",
+        exec_compatible_with = [],
+        target_settings = [],
+    )
+    asserts.equals(
+        env,
+        (["Zig SDK toolchain variants must have a non-empty name.", variant], None),
+        handle_toolchain_variant_tags([
+            struct(
+                is_root = True,
+                tags = struct(
+                    toolchain_variant = [variant],
+                ),
+            ),
+        ]),
+        "variants require non-empty names",
+    )
+
+    return unittest.end(env)
+
+_toolchain_variants_test = unittest.make(
+    _toolchain_variants_test_impl,
+)
+
 def bzlmod_zig_test_suite(name):
     unittest.suite(
         name,
         partial.make(_zig_versions_test, size = "small"),
+        partial.make(_toolchain_variants_test, size = "small"),
         partial.make(_merge_version_specs_test, size = "small"),
         partial.make(_parse_zig_index_test, size = "small"),
     )
